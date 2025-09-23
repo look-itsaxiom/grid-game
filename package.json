@@ -14,5 +14,8 @@
     "build:server": "npm run build --workspace=game-server",
     "build:all": "npm run build:shared && npm run build --workspaces --if-present",
     "install:all": "npm install"
+  },
+  "engines": {
+    "node": "24.2.0"
   }
 }
