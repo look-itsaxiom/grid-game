@@ -1,8 +1,8 @@
 
-# Step-by-Step Recipe: 2-Player Grid Game (Authoritative Multiplayer) with Phaser 3, Vite, TypeScript, and Nx Monorepo
+# Step-by-Step Recipe: 2-Player Grid Game (Authoritative Multiplayer) with Phaser 3, Vite, TypeScript, and npm Workspaces
 
 
-This guide outlines the steps to build a simple 2-player competitive game: each player hops around a 12x12 grid, can "fire" to color squares, and tries to catch the other player in their color to win. The server is authoritative, and the project uses Phaser 3 (frontend), a Node backend, TypeScript, Vite, and Nx for monorepo management.
+This guide outlines the steps to build a simple 2-player competitive game: each player hops around a 12x12 grid, can "fire" to color squares, and tries to catch the other player in their color to win. The server is authoritative, and the project uses Phaser 3 (frontend), a Node backend, TypeScript, Vite, and npm workspaces for monorepo management.
 
 **Additional screens and flow:**
 - Start screen (title, play button)
@@ -26,45 +26,113 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 - All game logic (movement, firing, color changes, win/loss) is enforced by the server.
 
 
-## 2. **Monorepo Setup with Nx**
-- **Create a new Nx workspace:**
+## 2. **Monorepo Setup with npm Workspaces**
+- **Create a new npm workspaces project:**
 	- Open a terminal and run:
 		```sh
-		npx create-nx-workspace@latest my-multiplayer-game --preset=apps --packageManager=npm
+		mkdir my-multiplayer-game
+		cd my-multiplayer-game
+		npm init -y
 		```
 		(Replace `my-multiplayer-game` with your folder name.)
-	- Choose "empty" or "apps" preset for maximum flexibility.
-	- `cd` into your workspace directory.
-- **Enable Nx workspaces support** (if not already):
-	- Nx uses `apps/` and `libs/` folders by default for projects and shared code.
+	- Edit the `package.json` to enable workspaces:
+		```json
+		{
+			"name": "my-multiplayer-game",
+			"version": "1.0.0",
+			"private": true,
+			"workspaces": [
+				"packages/*"
+			],
+			"scripts": {
+				"dev:client": "npm run dev --workspace=game-client",
+				"dev:server": "npm run dev --workspace=game-server",
+				"dev:shared": "npm run dev --workspace=shared",
+				"build:shared": "npm run build --workspace=shared",
+				"build:client": "npm run build --workspace=game-client",
+				"build:server": "npm run build --workspace=game-server",
+				"build:all": "npm run build:shared && npm run build --workspaces --if-present",
+				"install:all": "npm install"
+			}
+		}
+		```
+	- Create the packages directory:
+		```sh
+		mkdir packages
+		```
+	- Create a root TypeScript configuration for project references:
+		```sh
+		touch tsconfig.json
+		```
+	- Add the following to the root `tsconfig.json`:
+		```json
+		{
+			"files": [],
+			"references": [
+				{ "path": "./packages/shared" },
+				{ "path": "./packages/game-server" },
+				{ "path": "./packages/game-client" }
+			]
+		}
+		```
 - **Project structure:**
-	- `apps/game-client` — Phaser frontend (Vite app)
-	- `apps/game-server` — Node backend (Colyseus server)
-	- `libs/shared` — Shared types, Colyseus schemas, and logic
+	- `packages/game-client` — Phaser frontend (Vite app)
+	- `packages/game-server` — Node backend (Colyseus server)
+	- `packages/shared` — Shared types, Colyseus schemas, and logic
 
 ---
 
 
 
 ## 3. **Frontend: Phaser 3 + Vite + TypeScript**
-- **Generate the frontend app:**
-	- Run:
+- **Create the frontend package:**
+	- Create the directory:
 		```sh
-		nx g @nx/vite:app game-client
+		mkdir packages/game-client
+		```
+	- Navigate to the packages directory and create the Vite project:
+		```sh
+		cd packages
+		npm create vite@latest game-client -- --template vanilla-ts
+		```
+	- Return to root and install dependencies:
+		```sh
+		cd ..
+		npm install
 		```
 - **Install Phaser and types:**
-	- In `apps/game-client`, run:
+	- In the root directory, run:
 		```sh
-		npm install phaser
-		npm install --save-dev @types/phaser
+		npm install phaser --workspace=game-client
+		npm install --save-dev @types/phaser --workspace=game-client
+		```
+- **Install Colyseus client:**
+	- Install the Colyseus client for networking:
+		```sh
+		npm install colyseus.js --workspace=game-client
 		```
 - **Configure TypeScript for Phaser:**
-	- Ensure your `tsconfig.app.json` includes:
+	- Update your `packages/game-client/tsconfig.json` to include Phaser types and proper configuration:
 		```json
 		{
 			"compilerOptions": {
+				"target": "ES2020",
+				"lib": ["ES2020", "DOM", "DOM.Iterable"],
+				"module": "ESNext",
+				"skipLibCheck": true,
+				"moduleResolution": "bundler",
+				"allowImportingTsExtensions": true,
+				"resolveJsonModule": true,
+				"isolatedModules": true,
+				"noEmit": true,
+				"strict": true,
+				"noUnusedLocals": true,
+				"noUnusedParameters": true,
+				"noFallthroughCasesInSwitch": true,
 				"types": ["phaser"]
-			}
+			},
+			"include": ["src"],
+			"references": [{ "path": "../shared" }]
 		}
 		```
 - **Implement screens/scenes:**
@@ -88,37 +156,80 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 
 
 ## 4. **Backend: Authoritative Game Server with Colyseus**
-- **Generate the backend app:**
-	- Run:
+- **Create the backend package:**
+	- Create the directory and navigate to it:
 		```sh
-		nx g @nx/node:app game-server
+		mkdir packages/game-server
+		cd packages/game-server
+		```
+	- Initialize a Node.js package:
+		```sh
+		npm init -y
+		```
+	- Update the package.json to ensure proper module configuration:
+		```json
+		{
+			"name": "game-server",
+			"version": "1.0.0",
+			"type": "module",
+			"main": "dist/server.js",
+			"scripts": {
+				"dev": "tsx watch src/server.ts",
+				"build": "tsc",
+				"start": "node dist/server.js"
+			},
+			"dependencies": {},
+			"devDependencies": {}
+		}
+		```
+	- Return to root:
+		```sh
+		cd ../..
 		```
 - **Install Colyseus and tools:**
-	- In `apps/game-server`, run:
+	- From the root directory, run:
 		```sh
-		npm install colyseus @colyseus/schema @colyseus/tools
+		npm install colyseus @colyseus/schema @colyseus/tools express --workspace=game-server
+		npm install --save-dev typescript @types/node tsx --workspace=game-server
 		```
 - **TypeScript config:**
-	- Ensure `experimentalDecorators` is enabled in `tsconfig.json`:
+	- Create `packages/game-server/tsconfig.json`:
 		```json
 		{
 			"compilerOptions": {
-				"experimentalDecorators": true
-			}
+				"target": "ES2020",
+				"module": "ESNext",
+				"moduleResolution": "node",
+				"experimentalDecorators": true,
+				"emitDecoratorMetadata": true,
+				"outDir": "./dist",
+				"rootDir": "./src",
+				"strict": true,
+				"esModuleInterop": true,
+				"allowSyntheticDefaultImports": true,
+				"skipLibCheck": true,
+				"forceConsistentCasingInFileNames": true,
+				"declaration": true,
+				"declarationMap": true,
+				"sourceMap": true
+			},
+			"include": ["src/**/*"],
+			"exclude": ["node_modules", "dist"],
+			"references": [{ "path": "../shared" }]
 		}
 		```
 - **Colyseus setup:**
 	- Create a Room class for your game logic (handles player join/leave, ready, game loop, win/loss, etc.).
-	- Define a Schema for the game state (players, grid, timers, etc.) in `libs/shared` for type safety on both client and server.
+	- Define a Schema for the game state (players, grid, timers, etc.) in `packages/shared` for type safety on both client and server.
 	- Use Colyseus's built-in lobby/matchmaking or implement your own for lobby finder and ready-up screens.
 	- Broadcast state changes to clients automatically via Colyseus.
 - **Optional:**
 	- Integrate Express routes for health checks or credits.
-- **Nx workflow:**
-	- Use Nx to run/build the server as part of your monorepo workflow:
+- **npm workspaces workflow:**
+	- Use npm workspace commands to run/build the server:
 		```sh
-		nx serve game-server
-		nx build game-server
+		npm run dev:server
+		npm run build:server
 		```
 
 ---
@@ -126,18 +237,87 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 
 ## 5. **Shared Types and Logic**
 - **Create shared library:**
-	- Run:
+	- Create the directory and navigate to it:
 		```sh
-		nx g @nx/js:lib shared
+		mkdir packages/shared
+		cd packages/shared
+		```
+	- Initialize the package:
+		```sh
+		npm init -y
+		```
+	- Update the package.json:
+		```json
+		{
+			"name": "shared",
+			"version": "1.0.0",
+			"type": "module",
+			"main": "dist/index.js",
+			"types": "dist/index.d.ts",
+			"exports": {
+				".": {
+					"types": "./dist/index.d.ts",
+					"import": "./dist/index.js"
+				}
+			},
+			"scripts": {
+				"build": "tsc",
+				"dev": "tsc --watch"
+			}
+		}
+		```
+	- Create `packages/shared/tsconfig.json`:
+		```json
+		{
+			"compilerOptions": {
+				"target": "ES2020",
+				"module": "ESNext",
+				"moduleResolution": "node",
+				"experimentalDecorators": true,
+				"emitDecoratorMetadata": true,
+				"declaration": true,
+				"declarationMap": true,
+				"sourceMap": true,
+				"outDir": "./dist",
+				"rootDir": "./src",
+				"strict": true,
+				"esModuleInterop": true,
+				"allowSyntheticDefaultImports": true,
+				"skipLibCheck": true,
+				"forceConsistentCasingInFileNames": true,
+				"composite": true
+			},
+			"include": ["src/**/*"],
+			"exclude": ["node_modules", "dist"]
+		}
+		```
+	- Return to root:
+		```sh
+		cd ../..
+		```
+- **Install dependencies:**
+	- From the root directory, run:
+		```sh
+		npm install @colyseus/schema --workspace=shared
+		npm install --save-dev typescript --workspace=shared
 		```
 - **Define Colyseus Schema classes:**
-	- In `libs/shared`, create TypeScript files for:
+	- In `packages/shared/src`, create TypeScript files for:
 		- Player state (position, color, lives)
 		- Grid state (cell colors, timers)
 		- Game state (all players, grid, timers, game status)
 	- Use `@colyseus/schema` decorators for schema classes.
 - **Type safety:**
 	- Import and use these schemas/types in both frontend and backend for state sync and validation.
+	- Add the shared package as a dependency to other packages in their package.json:
+		```sh
+		# Add to game-client dependencies
+		npm install shared@* --workspace=game-client
+		
+		# Add to game-server dependencies  
+		npm install shared@* --workspace=game-server
+		```
+	- npm workspaces will automatically link the local packages.
 
 ---
 
@@ -157,18 +337,58 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 
 
 ## 7. **Development Workflow**
-- **Run apps:**
-	- Use Nx to run and build both apps independently or together:
+- **Build order matters:**
+	- Always build the shared package first since other packages depend on it:
 		```sh
-		nx serve game-client
-		nx serve game-server
+		npm run build:shared
 		```
-- **Visualize dependencies:**
-	- Run `nx graph` to see project dependencies.
-- **Efficient builds:**
-	- Use Nx caching and affected commands for fast builds/tests.
+	- Then build other packages:
+		```sh
+		npm run build:all
+		```
+- **Run apps:**
+	- Use npm workspace commands to run and build both apps independently or together:
+		```sh
+		npm run dev:client    # Run frontend dev server
+		npm run dev:server    # Run backend dev server
+		npm run dev:shared    # Run shared package in watch mode
+		npm run build:all     # Build all packages in correct order
+		```
+	- Or run directly in specific workspaces:
+		```sh
+		npm run dev --workspace=game-client
+		npm run dev --workspace=game-server
+		npm run dev --workspace=shared
+		```
+- **Install dependencies:**
+	- Install to specific workspace:
+		```sh
+		npm install <package> --workspace=game-client
+		npm install <package> --workspace=game-server
+		```
+	- Install to all workspaces:
+		```sh
+		npm install --workspaces
+		```
+- **Build and link shared package:**
+	- When you make changes to shared types, build the shared package first:
+		```sh
+		npm run build:shared
+		```
+	- Or use the watch mode for development:
+		```sh
+		npm run dev:shared
+		```
+	- The other packages will automatically use the updated shared code via npm workspaces linking.
 - **Debugging:**
 	- Use Colyseus's playground or monitor tools for debugging rooms and state.
+- **Package management:**
+	- npm workspaces automatically handles linking between packages in the monorepo.
+	- Use relative imports to reference shared code from client and server packages.
+- **Troubleshooting:**
+	- If you get import errors, ensure you've built the shared package first: `npm run build:shared`
+	- If TypeScript can't find types, check that project references are properly set up in tsconfig.json files
+	- Use `npm ls --workspaces` to verify all packages are properly linked
 
 ---
 
@@ -195,19 +415,29 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 ## 10. **Next Steps and Learning**
 - Add features: power-ups, more players, different grid sizes, etc.
 - Experiment with latency compensation or cheat prevention.
-- Explore Nx plugins for linting, testing, and CI/CD.
-- Read Phaser and Nx docs for advanced features.
+- Explore npm workspaces features for automation:
+  - Set up workspace scripts for coordinated testing
+  - Use `npm run <script> --workspaces --if-present` for conditional script execution
+  - Implement workspace-wide linting and formatting with shared configurations
+- Read Phaser and npm workspaces docs for advanced features.
+- Consider adding tools like:
+  - ESLint with shared configurations across packages (`npm install eslint --workspace=shared`)
+  - Prettier for consistent code formatting
+  - Husky for git hooks
+  - Jest or Vitest for testing across packages
+  - TypeScript project references for better build performance (already set up in this recipe)
 
 ---
 
 **Tip:** Keep the game logic on the server as the single source of truth. The client should only send input and render the state from the server.
 
 **References:**
-- [Nx Monorepo Docs](https://nx.dev)
+- [npm Workspaces Docs](https://docs.npmjs.com/cli/v7/using-npm/workspaces)
 - [Phaser 3 Docs](https://phaser.io)
 - [Vite Docs](https://vitejs.dev)
 - [TypeScript Project References](https://www.typescriptlang.org/docs/handbook/project-references.html)
+- [Colyseus Docs](https://colyseus.io)
 
 ---
 
-This recipe gives you a clear, step-by-step path to building your 2-player grid-based multiplayer game with best practices for monorepo and TypeScript development.
+This recipe gives you a clear, step-by-step path to building your 2-player grid-based multiplayer game with best practices for npm workspaces and TypeScript development.

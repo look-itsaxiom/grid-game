@@ -3,19 +3,19 @@
 
 # Project Overview
 - 2-player grid-based multiplayer game (12x12 grid, color/firing mechanics, lives, win/loss)
-- Tech stack: Nx monorepo, TypeScript, Vite, Phaser 3 (frontend), Colyseus (authoritative backend)
-- Nx structure: `apps/game-client` (Phaser), `apps/game-server` (Colyseus/Node), `libs/shared` (Colyseus Schema/types)
+- Tech stack: npm workspaces monorepo, TypeScript, Vite, Phaser 3 (frontend), Colyseus (authoritative backend)
+- npm workspaces structure: `packages/game-client` (Phaser), `packages/game-server` (Colyseus/Node), `packages/shared` (Colyseus Schema/types)
 - Minimal custom assets (colored squares, basic shapes)
 
 # User Preferences
 - Wants actionable, step-by-step guidance (not code, but commands, config hints, and reasoning)
 - Prefers recipes and instructions that balance high-level planning with concrete next steps
 - Enjoys learning by trying first, then asking for help after 5–10 minutes
-- Wants explanations for Nx, TypeScript, Phaser, and Colyseus setup and integration
+- Wants explanations for npm workspaces, TypeScript, Phaser, and Colyseus setup and integration
 - Prefers server-authoritative logic (all game rules enforced on backend)
 - Wants clear separation of frontend, backend, and shared code
 - Values type safety and shared schemas between client/server
-- Likes to see how Nx tools (graph, caching, affected) fit into workflow
+- Likes to see how npm workspaces features (package linking, script coordination) fit into workflow
 - Wants the recipe/instructions to evolve as requirements change
 
 # Copilot Guidance
@@ -24,7 +24,7 @@
 - Keep the instructions/recipe up to date as the project evolves
 
 # References
-- Nx: https://nx.dev
+- npm Workspaces: https://docs.npmjs.com/cli/v7/using-npm/workspaces
 - Phaser 3: https://phaser.io
 - Vite: https://vitejs.dev
 - Colyseus: https://colyseus.io
