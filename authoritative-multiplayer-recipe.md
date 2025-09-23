@@ -116,24 +116,35 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 		```json
 		{
 			"compilerOptions": {
-				"target": "ES2020",
-				"lib": ["ES2020", "DOM", "DOM.Iterable"],
+				"target": "ES2022",
+				"useDefineForClassFields": true,
 				"module": "ESNext",
+				"lib": ["ES2022", "DOM", "DOM.Iterable"],
+				"types": ["vite/client"],
 				"skipLibCheck": true,
 				"moduleResolution": "bundler",
 				"allowImportingTsExtensions": true,
-				"resolveJsonModule": true,
-				"isolatedModules": true,
+				"verbatimModuleSyntax": true,
+				"moduleDetection": "force",
 				"noEmit": true,
 				"strict": true,
 				"noUnusedLocals": true,
 				"noUnusedParameters": true,
+				"erasableSyntaxOnly": true,
 				"noFallthroughCasesInSwitch": true,
-				"types": ["phaser"]
+				"noUncheckedSideEffectImports": true
 			},
 			"include": ["src"],
 			"references": [{ "path": "../shared" }]
 		}
+		```
+	- Add Phaser types by updating the types array to include "phaser":
+		```json
+		"types": ["vite/client", "phaser"]
+		```
+	- Install Phaser types if not already installed:
+		```sh
+		npm install --save-dev @types/phaser --workspace=game-client
 		```
 - **Set up Phaser application structure:**
 	- Create `packages/game-client/src/main.ts` as your entry point:
@@ -226,18 +237,65 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 	
 	**Colyseus Client Integration:**
 	- Install and import: `import { Client } from 'colyseus.js'`
-	- Create client instance: `const client = new Client('ws://localhost:2567')`
-	- Join room and store reference: `this.room = await client.joinOrCreate('GameRoom')`
+	- Create a configuration file for environment-specific settings:
+		```typescript
+		// packages/game-client/src/config/server-config.ts
+		const SERVER_CONFIG = {
+			development: {
+				protocol: 'ws',
+				hostname: 'localhost',
+				port: 2567
+			},
+			production: {
+				protocol: 'wss', // Use secure WebSocket in production
+				hostname: 'your-game-server.com',
+				port: 443 // Standard HTTPS port
+			}
+		};
+		
+		const isDevelopment = import.meta.env.MODE === 'development';
+		const config = isDevelopment ? SERVER_CONFIG.development : SERVER_CONFIG.production;
+		
+		export const SERVER_URL = `${config.protocol}://${config.hostname}:${config.port}`;
+		```
+	- Create client instance: `const client = new Client(SERVER_URL)`
+	- Join room with error handling:
+		```typescript
+		try {
+			this.room = await client.joinOrCreate('GameRoom');
+			console.log('Connected to room:', this.room.id);
+		} catch (error) {
+			console.error('Failed to join room:', error);
+			// Handle connection failure (show error message, retry logic)
+		}
+		```
 	- Send player input as messages: `this.room.send('move', { direction: 'up' })`
-	- Listen for state changes: `this.room.onStateChange((state) => { /* update visuals */ })`
+	- Listen for state changes with type safety:
+		```typescript
+		this.room.onStateChange((state: GameState) => {
+			this.renderGameState(state);
+		});
+		```
+	- Handle connection events:
+		```typescript
+		this.room.onLeave((code) => {
+			console.log('Left room with code:', code);
+			// Handle disconnection
+		});
+		
+		this.room.onError((code, message) => {
+			console.error('Room error:', code, message);
+			// Handle room errors
+		});
+		```
 	- Example input handling:
 		```typescript
 		update() {
 			if (Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
-				this.room.send('move', { direction: 'up' });
+				this.room?.send('move', { direction: 'up' });
 			}
 			if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
-				this.room.send('fire', {});
+				this.room?.send('fire', {});
 			}
 		}
 		```
@@ -1226,23 +1284,576 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 
 
 ## 8. **Testing and Iteration**
-- **Local testing:**
-	- Open two browser tabs or devices to simulate two players.
-- **Colyseus playground:**
-	- Use Colyseus's playground for manual room testing and state inspection.
-- **Debugging:**
-	- Add simple logging/debugging tools as needed.
-- **Tuning:**
-	- Tune timing for color changes and firing for best feel.
-- **Iteration:**
-	- Iterate on rules and UX as needed based on playtesting.
+
+- **Development testing workflow:**
+
+	**Local Multi-client Testing:**
+	- Run both client and server in development mode:
+		```sh
+		# Terminal 1: Build shared package
+		npm run dev:shared
+		
+		# Terminal 2: Start server
+		npm run dev:server
+		
+		# Terminal 3: Start client
+		npm run dev:client
+		```
+	- Open multiple browser tabs (or different browsers) to `http://localhost:5173` (default Vite port)
+	- Use different browsers or incognito windows to simulate different players
+	- Use browser developer tools Network tab to monitor WebSocket connections
+
+	**Mobile and Cross-platform Testing:**
+	- Test on different devices by accessing your local dev server from other devices on the same network
+	- Find your local IP: `ipconfig` (Windows) or `ifconfig` (Mac/Linux)
+	- Update Vite config to bind to all interfaces: `vite --host 0.0.0.0`
+	- Access from mobile device: `http://[YOUR_LOCAL_IP]:5173`
+
+- **Colyseus development tools:**
+
+	**Colyseus Monitor (Real-time Room Debugging):**
+	- Install the monitor globally:
+		```sh
+		npm install --global @colyseus/monitor
+		```
+	- Start monitor (runs on port 2567 by default):
+		```sh
+		colyseus-monitor
+		```
+	- Access monitor at `http://localhost:2567/colyseus` to view:
+		- Active rooms and their states
+		- Connected clients
+		- Real-time state changes
+		- Room lifecycle events
+
+	**Custom Debug Messages:**
+	- Add comprehensive logging in your GameRoom:
+		```typescript
+		// In GameRoom.ts
+		onJoin(client: Client) {
+			console.log(`Player ${client.sessionId} joined`);
+			console.log(`Room now has ${this.clients.length} players`);
+		}
+		
+		onMessage('move', (client, message) => {
+			console.log(`Player ${client.sessionId} moved ${message.direction}`);
+			// Log current game state for debugging
+			console.log('Current positions:', 
+				Array.from(this.state.players.values()).map(p => ({id: p.id, x: p.x, y: p.y}))
+			);
+		}
+		```
+
+	**State Inspection Utilities:**
+	- Add development-only state dump commands:
+		```typescript
+		// Debug message handler (remove in production)
+		this.onMessage('debug_state', (client, message) => {
+			if (process.env.NODE_ENV === 'development') {
+				console.log('=== GAME STATE DEBUG ===');
+				console.log('Game Phase:', this.state.gamePhase);
+				console.log('Players:', this.state.players.toJSON());
+				console.log('Grid:', Array.from(this.state.grid.values())
+					.filter(cell => cell.color !== 'neutral')
+					.map(cell => ({x: cell.x, y: cell.y, color: cell.color}))
+				);
+				console.log('========================');
+			}
+		});
+		```
+
+- **Game balance and tuning:**
+
+	**Timing Adjustments:**
+	- Test different values for game constants and adjust in `game-constants.ts`:
+		```typescript
+		// Experiment with these values during testing:
+		export const GAME_CONFIG = {
+			GRID_SIZE: 12,
+			MAX_LIVES: 3,
+			FIRE_COOLDOWN: 2000,    // Try 1500, 2500, 3000
+			COLOR_DURATION: 3000,   // Try 2000, 4000, 5000  
+			TICK_RATE: 100,         // Try 50, 150, 200
+			MOVE_COOLDOWN: 150      // Add to prevent movement spam
+		} as const;
+		```
+
+	**Playtesting Checklist:**
+	- [ ] Can both players join and see each other?
+	- [ ] Do movement controls feel responsive?
+	- [ ] Is the firing cooldown appropriate?
+	- [ ] Are color durations long enough to be strategic but not overpowered?
+	- [ ] Do players understand when they've been hit?
+	- [ ] Is the game length appropriate (not too short/long)?
+	- [ ] Do win/loss conditions work correctly?
+	- [ ] Can players easily start a new game?
+
+	**Performance Testing:**
+	- Monitor browser performance during gameplay:
+		- Open browser DevTools → Performance tab
+		- Record while playing to identify frame drops
+		- Check for memory leaks during extended play
+	- Server performance monitoring:
+		```typescript
+		// Add performance monitoring in GameRoom
+		setupGameLoop() {
+			let frameCount = 0;
+			const startTime = Date.now();
+			
+			this.gameLoopInterval = this.clock.setInterval(() => {
+				const tickStart = performance.now();
+				
+				// Your game logic here
+				this.updateGame(GAME_CONFIG.TICK_RATE);
+				
+				const tickDuration = performance.now() - tickStart;
+				frameCount++;
+				
+				// Log performance every 10 seconds
+				if (frameCount % 100 === 0) {
+					console.log(`Tick ${frameCount}: ${tickDuration.toFixed(2)}ms`);
+				}
+			}, GAME_CONFIG.TICK_RATE);
+		}
+		```
+
+- **Debugging common issues:**
+
+	**Connection Problems:**
+	- Client can't connect to server:
+		- Check if server is running: `curl http://localhost:2567`
+		- Verify WebSocket URL in client matches server port
+		- Check firewall settings
+		- Try different browsers
+
+	**State Synchronization Issues:**
+	- Players not seeing each other's moves:
+		- Verify schema decorators on all properties
+		- Check that state changes are applied to schema instances
+		- Use Colyseus monitor to verify state updates
+		- Add logging to `onStateChange` in client
+
+	**Input Lag or Stuttering:**
+	- Reduce tick rate if server can't keep up
+	- Check network latency with browser DevTools
+		- Open Network tab, filter by WS (WebSocket)
+		- Monitor message frequency and sizes
+	- Consider input validation optimizations
+
+	**Memory Leaks:**
+	- Check for proper cleanup in Phaser scenes:
+		```typescript
+		// In Phaser scene
+		destroy() {
+			// Clean up Colyseus listeners
+			this.room?.removeAllListeners();
+			
+			// Clean up Phaser objects
+			this.children.removeAll(true);
+			
+			super.destroy();
+		}
+		```
+
+- **Automated testing setup (optional):**
+
+	**Unit Testing for Shared Logic:**
+	- Install testing framework:
+		```sh
+		npm install --save-dev vitest --workspace=shared
+		```
+	- Test game constants and utility functions:
+		```typescript
+		// packages/shared/src/__tests__/game-logic.test.ts
+		import { describe, it, expect } from 'vitest';
+		import { GAME_CONFIG, GamePhase } from '../constants/game-constants';
+		
+		describe('Game Constants', () => {
+			it('should have valid grid size', () => {
+				expect(GAME_CONFIG.GRID_SIZE).toBeGreaterThan(0);
+				expect(GAME_CONFIG.GRID_SIZE).toBeLessThanOrEqual(20);
+			});
+		});
+		```
+
+	**Integration Testing for Server:**
+	- Test room creation and basic functionality:
+		```typescript
+		// packages/game-server/src/__tests__/GameRoom.test.ts
+		import { ColyseusTestServer, boot } from '@colyseus/testing';
+		import { GameRoom } from '../rooms/GameRoom';
+		
+		describe('GameRoom', () => {
+			let colyseus: ColyseusTestServer;
+			
+			beforeAll(async () => {
+				colyseus = await boot({
+					rooms: [GameRoom]
+				});
+			});
+			
+			it('should create room and accept players', async () => {
+				const room = await colyseus.createRoom('GameRoom');
+				const client1 = await colyseus.connectTo(room);
+				const client2 = await colyseus.connectTo(room);
+				
+				expect(room.clients.length).toBe(2);
+			});
+		});
+		```
+
+- **Performance optimization iteration:**
+	- Profile and optimize based on testing results
+	- Consider reducing state update frequency for non-critical updates
+	- Batch multiple state changes within single tick
+	- Use object pooling for frequently created/destroyed objects
+
+- **User experience iteration:**
+	- Add visual and audio feedback for important events
+	- Implement smooth transitions between game states
+	- Add loading states and connection status indicators
+	- Consider adding tutorial or help screen based on user feedback
 
 ---
 
-## 9. **Deployment (Optional)**
-- Build production versions of both apps.
-- Deploy backend to a server or cloud platform.
-- Deploy frontend as static files or serve from backend.
+## 9. **Deployment and Production Setup**
+
+- **Build production versions:**
+
+	**Build all packages for production:**
+	```sh
+	# From root directory
+	npm run build:all
+	```
+	This will:
+	1. Build shared package first (creates types and compiled JS)
+	2. Build game-server (compiles TypeScript to dist/)
+	3. Build game-client (creates optimized Vite build in dist/)
+
+	**Verify builds:**
+	```sh
+	# Check that all dist directories exist
+	ls packages/*/dist/
+	
+	# Test production server locally
+	cd packages/game-server && npm start
+	
+	# Test production client (serve static files)
+	cd packages/game-client && npx serve dist/
+	```
+
+- **Backend deployment options:**
+
+	**Option 1: Traditional VPS/Cloud Server (DigitalOcean, AWS EC2, etc.):**
+	
+	1. **Prepare server environment:**
+		```sh
+		# Install Node.js (version 18+ recommended)
+		curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+		sudo apt-get install -y nodejs
+		
+		# Install PM2 for process management
+		npm install -g pm2
+		```
+
+	2. **Deploy server code:**
+		```sh
+		# Upload your built server code to server
+		scp -r packages/game-server/dist/ user@yourserver:/var/www/game-server/
+		scp packages/game-server/package.json user@yourserver:/var/www/game-server/
+		
+		# On server, install production dependencies
+		cd /var/www/game-server
+		npm install --production
+		```
+
+	3. **Configure PM2:**
+		```js
+		// ecosystem.config.js
+		module.exports = {
+			apps: [{
+				name: 'game-server',
+				script: './dist/server.js',
+				instances: 1,
+				env: {
+					NODE_ENV: 'production',
+					PORT: 2567
+				},
+				env_production: {
+					NODE_ENV: 'production',
+					PORT: 2567
+				}
+			}]
+		};
+		```
+
+	4. **Start with PM2:**
+		```sh
+		pm2 start ecosystem.config.js --env production
+		pm2 save
+		pm2 startup
+		```
+
+	**Option 2: Docker Deployment:**
+	
+	1. **Create Dockerfile for server:**
+		```dockerfile
+		# packages/game-server/Dockerfile
+		FROM node:18-alpine
+		
+		WORKDIR /app
+		
+		# Copy package files
+		COPY package*.json ./
+		RUN npm ci --only=production
+		
+		# Copy built application
+		COPY dist/ ./dist/
+		
+		EXPOSE 2567
+		
+		CMD ["node", "dist/server.js"]
+		```
+
+	2. **Build and run Docker image:**
+		```sh
+		# Build image
+		cd packages/game-server
+		docker build -t game-server .
+		
+		# Run container
+		docker run -d -p 2567:2567 --name game-server-instance game-server
+		```
+
+	**Option 3: Platform-as-a-Service (Heroku, Railway, Render):**
+	
+	- **Heroku example:**
+		1. Create `Procfile` in server package:
+			```
+			web: node dist/server.js
+			```
+		2. Set environment variables:
+			```sh
+			heroku config:set NODE_ENV=production
+			heroku config:set PORT=$PORT
+			```
+		3. Deploy:
+			```sh
+			git subtree push --prefix packages/game-server heroku main
+			```
+
+- **Frontend deployment options:**
+
+	**Option 1: Static File Hosting (Netlify, Vercel, GitHub Pages):**
+	
+	1. **Configure build output:**
+		```js
+		// packages/game-client/vite.config.ts
+		import { defineConfig } from 'vite';
+		
+		export default defineConfig({
+			base: '/', // Adjust if deploying to subdirectory
+			build: {
+				outDir: 'dist',
+				assetsDir: 'assets',
+				sourcemap: false, // Disable for production
+			},
+			server: {
+				host: true, // Allow external connections in dev
+			}
+		});
+		```
+
+	2. **Update server URL for production:**
+		```typescript
+		// packages/game-client/src/config.ts
+		export const SERVER_URL = process.env.NODE_ENV === 'production' 
+			? 'wss://your-game-server.com'
+			: 'ws://localhost:2567';
+		```
+
+	3. **Deploy to Netlify:**
+		```sh
+		# Install Netlify CLI
+		npm install -g netlify-cli
+		
+		# Deploy from client dist directory
+		cd packages/game-client
+		netlify deploy --prod --dir=dist
+		```
+
+	**Option 2: Serve from Backend (Express Static Files):**
+	
+	- Modify your server to serve client files:
+		```typescript
+		// packages/game-server/src/server.ts
+		import express from 'express';
+		import path from 'path';
+		
+		const app = express();
+		
+		// Serve static files from client build
+		const clientPath = path.join(__dirname, '../../game-client/dist');
+		app.use(express.static(clientPath));
+		
+		// Catch-all handler for SPA
+		app.get('*', (req, res) => {
+			res.sendFile(path.join(clientPath, 'index.html'));
+		});
+		
+		// Create HTTP server and attach Colyseus
+		const server = createServer(app);
+		const gameServer = new Server({ server });
+		```
+
+- **Production environment configuration:**
+
+	**Environment Variables:**
+	```sh
+	# Server environment variables
+	NODE_ENV=production
+	PORT=2567
+	CORS_ORIGIN=https://yourgame.com
+	DATABASE_URL=postgresql://... # If using database
+	REDIS_URL=redis://... # If using Redis for scaling
+	```
+
+	**Production server configuration:**
+	```typescript
+	// packages/game-server/src/server.ts
+	import { Server } from 'colyseus';
+	import express from 'express';
+	
+	const app = express();
+	
+	// Production middleware
+	if (process.env.NODE_ENV === 'production') {
+		// Enable trust proxy for load balancers
+		app.set('trust proxy', 1);
+		
+		// Add security headers
+		app.use((req, res, next) => {
+			res.setHeader('X-Content-Type-Options', 'nosniff');
+			res.setHeader('X-Frame-Options', 'DENY');
+			res.setHeader('X-XSS-Protection', '1; mode=block');
+			next();
+		});
+	}
+	
+	const gameServer = new Server({
+		server: createServer(app),
+		engine: process.env.NODE_ENV === 'production' ? 'ws' : undefined,
+	});
+	```
+
+- **SSL/HTTPS setup:**
+
+	**Option 1: Let's Encrypt with Nginx:**
+	```nginx
+	# /etc/nginx/sites-available/game-server
+	server {
+		listen 80;
+		server_name yourgame.com;
+		return 301 https://$server_name$request_uri;
+	}
+	
+	server {
+		listen 443 ssl http2;
+		server_name yourgame.com;
+		
+		ssl_certificate /etc/letsencrypt/live/yourgame.com/fullchain.pem;
+		ssl_certificate_key /etc/letsencrypt/live/yourgame.com/privkey.pem;
+		
+		location / {
+			proxy_pass http://localhost:2567;
+			proxy_http_version 1.1;
+			proxy_set_header Upgrade $http_upgrade;
+			proxy_set_header Connection 'upgrade';
+			proxy_set_header Host $host;
+			proxy_set_header X-Real-IP $remote_addr;
+			proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+			proxy_set_header X-Forwarded-Proto $scheme;
+			proxy_cache_bypass $http_upgrade;
+		}
+	}
+	```
+
+	**Option 2: Cloudflare (Automatic SSL):**
+	- Point your domain to your server IP
+	- Enable Cloudflare proxy (orange cloud)
+	- SSL/TLS mode: "Full (strict)" for best security
+
+- **Scaling considerations:**
+
+	**Horizontal Scaling with Redis:**
+	```typescript
+	// For multiple server instances
+	import { RedisPresence } from '@colyseus/redis-presence';
+	
+	const gameServer = new Server({
+		presence: new RedisPresence({
+			host: process.env.REDIS_HOST,
+			port: parseInt(process.env.REDIS_PORT || '6379'),
+		}),
+	});
+	```
+
+	**Load Balancing:**
+	- Use sticky sessions for WebSocket connections
+	- Configure load balancer to route based on session ID
+	- Consider using a service mesh for microservices architecture
+
+- **Monitoring and logging:**
+
+	**Basic Production Logging:**
+	```typescript
+	// packages/game-server/src/server.ts
+	import winston from 'winston';
+	
+	const logger = winston.createLogger({
+		level: 'info',
+		format: winston.format.combine(
+			winston.format.timestamp(),
+			winston.format.json()
+		),
+		transports: [
+			new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+			new winston.transports.File({ filename: 'logs/combined.log' }),
+		],
+	});
+	
+	if (process.env.NODE_ENV !== 'production') {
+		logger.add(new winston.transports.Console({
+			format: winston.format.simple()
+		}));
+	}
+	```
+
+	**Health Check Endpoint:**
+	```typescript
+	// Add to server.ts
+	app.get('/health', (req, res) => {
+		res.json({
+			status: 'ok',
+			timestamp: new Date().toISOString(),
+			uptime: process.uptime(),
+			memory: process.memoryUsage(),
+			rooms: gameServer.presence.channels.size
+		});
+	});
+	```
+
+- **Production deployment checklist:**
+	- [ ] Environment variables properly configured
+	- [ ] SSL certificate installed and working
+	- [ ] Server restart mechanism in place (PM2, Docker restart policies)
+	- [ ] Database migrations applied (if using database)
+	- [ ] Monitoring and logging configured
+	- [ ] Health checks responding correctly
+	- [ ] Client build points to production server URL
+	- [ ] CORS settings allow your frontend domain
+	- [ ] Firewall rules allow necessary ports
+	- [ ] Regular backups configured (if storing persistent data)
 
 ## 10. **Next Steps and Learning**
 - Add features: power-ups, more players, different grid sizes, etc.
