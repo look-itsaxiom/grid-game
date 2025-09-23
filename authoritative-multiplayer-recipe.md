@@ -47,9 +47,11 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 			"scripts": {
 				"dev:client": "npm run dev --workspace=game-client",
 				"dev:server": "npm run dev --workspace=game-server",
+				"dev:shared": "npm run dev --workspace=shared",
+				"build:shared": "npm run build --workspace=shared",
 				"build:client": "npm run build --workspace=game-client",
 				"build:server": "npm run build --workspace=game-server",
-				"build:all": "npm run build --workspaces",
+				"build:all": "npm run build:shared && npm run build --workspaces --if-present",
 				"install:all": "npm install"
 			}
 		}
@@ -57,6 +59,21 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 	- Create the packages directory:
 		```sh
 		mkdir packages
+		```
+	- Create a root TypeScript configuration for project references:
+		```sh
+		touch tsconfig.json
+		```
+	- Add the following to the root `tsconfig.json`:
+		```json
+		{
+			"files": [],
+			"references": [
+				{ "path": "./packages/shared" },
+				{ "path": "./packages/game-server" },
+				{ "path": "./packages/game-client" }
+			]
+		}
 		```
 - **Project structure:**
 	- `packages/game-client` — Phaser frontend (Vite app)
@@ -69,18 +86,18 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 
 ## 3. **Frontend: Phaser 3 + Vite + TypeScript**
 - **Create the frontend package:**
-	- Create the directory and navigate to it:
+	- Create the directory:
 		```sh
 		mkdir packages/game-client
-		cd packages/game-client
 		```
-	- Initialize a Vite + TypeScript project:
+	- Navigate to the packages directory and create the Vite project:
 		```sh
-		npm create vite@latest . -- --template vanilla-ts
+		cd packages
+		npm create vite@latest game-client -- --template vanilla-ts
 		```
 	- Return to root and install dependencies:
 		```sh
-		cd ../..
+		cd ..
 		npm install
 		```
 - **Install Phaser and types:**
@@ -89,13 +106,33 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 		npm install phaser --workspace=game-client
 		npm install --save-dev @types/phaser --workspace=game-client
 		```
+- **Install Colyseus client:**
+	- Install the Colyseus client for networking:
+		```sh
+		npm install colyseus.js --workspace=game-client
+		```
 - **Configure TypeScript for Phaser:**
-	- Ensure your `packages/game-client/tsconfig.json` includes:
+	- Update your `packages/game-client/tsconfig.json` to include Phaser types and proper configuration:
 		```json
 		{
 			"compilerOptions": {
+				"target": "ES2020",
+				"lib": ["ES2020", "DOM", "DOM.Iterable"],
+				"module": "ESNext",
+				"skipLibCheck": true,
+				"moduleResolution": "bundler",
+				"allowImportingTsExtensions": true,
+				"resolveJsonModule": true,
+				"isolatedModules": true,
+				"noEmit": true,
+				"strict": true,
+				"noUnusedLocals": true,
+				"noUnusedParameters": true,
+				"noFallthroughCasesInSwitch": true,
 				"types": ["phaser"]
-			}
+			},
+			"include": ["src"],
+			"references": [{ "path": "../shared" }]
 		}
 		```
 - **Implement screens/scenes:**
@@ -129,7 +166,7 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 		```sh
 		npm init -y
 		```
-	- Update the package.json:
+	- Update the package.json to ensure proper module configuration:
 		```json
 		{
 			"name": "game-server",
@@ -140,7 +177,9 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 				"dev": "tsx watch src/server.ts",
 				"build": "tsc",
 				"start": "node dist/server.js"
-			}
+			},
+			"dependencies": {},
+			"devDependencies": {}
 		}
 		```
 	- Return to root:
@@ -167,11 +206,16 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 				"rootDir": "./src",
 				"strict": true,
 				"esModuleInterop": true,
+				"allowSyntheticDefaultImports": true,
 				"skipLibCheck": true,
-				"forceConsistentCasingInFileNames": true
+				"forceConsistentCasingInFileNames": true,
+				"declaration": true,
+				"declarationMap": true,
+				"sourceMap": true
 			},
 			"include": ["src/**/*"],
-			"exclude": ["node_modules", "dist"]
+			"exclude": ["node_modules", "dist"],
+			"references": [{ "path": "../shared" }]
 		}
 		```
 - **Colyseus setup:**
@@ -210,6 +254,12 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 			"type": "module",
 			"main": "dist/index.js",
 			"types": "dist/index.d.ts",
+			"exports": {
+				".": {
+					"types": "./dist/index.d.ts",
+					"import": "./dist/index.js"
+				}
+			},
 			"scripts": {
 				"build": "tsc",
 				"dev": "tsc --watch"
@@ -226,12 +276,16 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 				"experimentalDecorators": true,
 				"emitDecoratorMetadata": true,
 				"declaration": true,
+				"declarationMap": true,
+				"sourceMap": true,
 				"outDir": "./dist",
 				"rootDir": "./src",
 				"strict": true,
 				"esModuleInterop": true,
+				"allowSyntheticDefaultImports": true,
 				"skipLibCheck": true,
-				"forceConsistentCasingInFileNames": true
+				"forceConsistentCasingInFileNames": true,
+				"composite": true
 			},
 			"include": ["src/**/*"],
 			"exclude": ["node_modules", "dist"]
@@ -255,11 +309,15 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 	- Use `@colyseus/schema` decorators for schema classes.
 - **Type safety:**
 	- Import and use these schemas/types in both frontend and backend for state sync and validation.
-	- Link the shared package to other packages:
+	- Add the shared package as a dependency to other packages in their package.json:
 		```sh
-		npm install ../shared --workspace=game-client
-		npm install ../shared --workspace=game-server
+		# Add to game-client dependencies
+		npm install shared@* --workspace=game-client
+		
+		# Add to game-server dependencies  
+		npm install shared@* --workspace=game-server
 		```
+	- npm workspaces will automatically link the local packages.
 
 ---
 
@@ -279,17 +337,28 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 
 
 ## 7. **Development Workflow**
+- **Build order matters:**
+	- Always build the shared package first since other packages depend on it:
+		```sh
+		npm run build:shared
+		```
+	- Then build other packages:
+		```sh
+		npm run build:all
+		```
 - **Run apps:**
 	- Use npm workspace commands to run and build both apps independently or together:
 		```sh
 		npm run dev:client    # Run frontend dev server
 		npm run dev:server    # Run backend dev server
-		npm run build:all     # Build all packages
+		npm run dev:shared    # Run shared package in watch mode
+		npm run build:all     # Build all packages in correct order
 		```
 	- Or run directly in specific workspaces:
 		```sh
 		npm run dev --workspace=game-client
 		npm run dev --workspace=game-server
+		npm run dev --workspace=shared
 		```
 - **Install dependencies:**
 	- Install to specific workspace:
@@ -302,15 +371,24 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 		npm install --workspaces
 		```
 - **Build and link shared package:**
-	- When you make changes to shared types:
+	- When you make changes to shared types, build the shared package first:
 		```sh
-		npm run build --workspace=shared
+		npm run build:shared
 		```
+	- Or use the watch mode for development:
+		```sh
+		npm run dev:shared
+		```
+	- The other packages will automatically use the updated shared code via npm workspaces linking.
 - **Debugging:**
 	- Use Colyseus's playground or monitor tools for debugging rooms and state.
 - **Package management:**
 	- npm workspaces automatically handles linking between packages in the monorepo.
 	- Use relative imports to reference shared code from client and server packages.
+- **Troubleshooting:**
+	- If you get import errors, ensure you've built the shared package first: `npm run build:shared`
+	- If TypeScript can't find types, check that project references are properly set up in tsconfig.json files
+	- Use `npm ls --workspaces` to verify all packages are properly linked
 
 ---
 
@@ -337,13 +415,17 @@ This guide outlines the steps to build a simple 2-player competitive game: each 
 ## 10. **Next Steps and Learning**
 - Add features: power-ups, more players, different grid sizes, etc.
 - Experiment with latency compensation or cheat prevention.
-- Explore npm scripts and workspace features for automation.
+- Explore npm workspaces features for automation:
+  - Set up workspace scripts for coordinated testing
+  - Use `npm run <script> --workspaces --if-present` for conditional script execution
+  - Implement workspace-wide linting and formatting with shared configurations
 - Read Phaser and npm workspaces docs for advanced features.
 - Consider adding tools like:
-  - ESLint with shared configurations across packages
+  - ESLint with shared configurations across packages (`npm install eslint --workspace=shared`)
   - Prettier for consistent code formatting
   - Husky for git hooks
-  - Simple scripts for coordinated testing across packages
+  - Jest or Vitest for testing across packages
+  - TypeScript project references for better build performance (already set up in this recipe)
 
 ---
 
