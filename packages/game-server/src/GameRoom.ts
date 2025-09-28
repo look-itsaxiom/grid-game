@@ -1,4 +1,7 @@
-import { Room, Client, ServerError } from 'colyseus';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { Room, Client } = require('colyseus');
+
 import { GameRoom, Player, GridCell } from 'shared';
 import { 
   GRID_SIZE, MAX_PLAYERS, PLAYER_LIVES, 
@@ -29,11 +32,11 @@ export class GridGameRoom extends Room<GameRoom> {
     }, 16); // ~60fps
   }
 
-  onJoin(client: Client) {
+  onJoin(client: any) {
     console.log(`Player ${client.sessionId} joined`);
     
     if (Object.keys(this.state.players).length >= MAX_PLAYERS) {
-      throw new ServerError(400, 'Room is full');
+      throw new Error('Room is full');
     }
     
     const player = new Player();
@@ -49,7 +52,7 @@ export class GridGameRoom extends Room<GameRoom> {
     this.state.players.set(client.sessionId, player);
   }
 
-  onLeave(client: Client) {
+  onLeave(client: any) {
     console.log(`Player ${client.sessionId} left`);
     this.state.players.delete(client.sessionId);
     
@@ -92,7 +95,7 @@ export class GridGameRoom extends Room<GameRoom> {
     return positions[playerIndex] || { x: 0, y: 0 };
   }
 
-  private handleInput(client: Client, message: InputMessage) {
+  private handleInput(client: any, message: InputMessage) {
     const player = this.state.players.get(client.sessionId);
     if (!player) return;
 
@@ -113,7 +116,7 @@ export class GridGameRoom extends Room<GameRoom> {
     }
   }
 
-  private handleReady(client: Client) {
+  private handleReady(client: any) {
     const player = this.state.players.get(client.sessionId);
     if (!player || this.state.gameState !== GameState.LOBBY) return;
 
@@ -147,7 +150,7 @@ export class GridGameRoom extends Room<GameRoom> {
     });
   }
 
-  private handleMove(client: Client, direction: Direction) {
+  private handleMove(client: any, direction: Direction) {
     const player = this.state.players.get(client.sessionId);
     if (!player || !player.alive) return;
 
@@ -187,7 +190,7 @@ export class GridGameRoom extends Room<GameRoom> {
     return pos.x >= 0 && pos.x < GRID_SIZE && pos.y >= 0 && pos.y < GRID_SIZE;
   }
 
-  private handleFire(client: Client) {
+  private handleFire(client: any) {
     const player = this.state.players.get(client.sessionId);
     if (!player || !player.alive) return;
 

@@ -43,6 +43,7 @@ export class StartScene extends Phaser.Scene {
 
     playButton.on('pointerup', () => {
       playButton.setFillStyle(0x3498db);
+      console.log('PLAY button clicked - transitioning to LobbyFinderScene');
       this.scene.start('LobbyFinderScene');
     });
 
@@ -52,6 +53,7 @@ export class StartScene extends Phaser.Scene {
 
     creditsButton.on('pointerup', () => {
       creditsButton.setFillStyle(0x95a5a6);
+      console.log('CREDITS button clicked - transitioning to CreditsScene');
       this.scene.start('CreditsScene');
     });
 

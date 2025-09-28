@@ -10,6 +10,7 @@ export class LobbyFinderScene extends Phaser.Scene {
   }
 
   create() {
+    console.log('LobbyFinderScene created');
     const { width, height } = this.cameras.main;
 
     // Title

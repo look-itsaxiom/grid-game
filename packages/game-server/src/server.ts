@@ -1,4 +1,7 @@
-import { Server } from 'colyseus';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { Server } = require('colyseus');
+
 import { createServer } from 'http';
 import express from 'express';
 import cors from 'cors';
