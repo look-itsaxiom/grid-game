@@ -1,0 +1,25 @@
+{
+  "name": "grid-game",
+  "version": "1.0.0",
+  "description": "4-player competitive grid game with authoritative multiplayer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:client": "npm run dev --workspace=game-client",
+    "dev:server": "npm run dev --workspace=game-server",
+    "build:client": "npm run build --workspace=game-client",
+    "build:server": "npm run build --workspace=game-server",
+    "build:shared": "npm run build --workspace=shared",
+    "build": "npm run build:shared && npm run build:server && npm run build:client",
+    "start:client": "npm run start --workspace=game-client",
+    "start:server": "npm run start --workspace=game-server"
+  },
+  "workspaces": [
+    "packages/shared",
+    "packages/game-server",
+    "packages/game-client"
+  ],
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
