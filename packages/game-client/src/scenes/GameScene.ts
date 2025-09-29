@@ -61,17 +61,22 @@ export class GameScene extends Phaser.Scene {
 
     // Movement
     if (Phaser.Input.Keyboard.JustDown(this.cursors.up!) || Phaser.Input.Keyboard.JustDown(this.wasdKeys.W)) {
+      console.log('Sending move UP input');
       this.gameService.sendInput({ type: 'move', direction: Direction.UP });
     } else if (Phaser.Input.Keyboard.JustDown(this.cursors.down!) || Phaser.Input.Keyboard.JustDown(this.wasdKeys.S)) {
+      console.log('Sending move DOWN input');
       this.gameService.sendInput({ type: 'move', direction: Direction.DOWN });
     } else if (Phaser.Input.Keyboard.JustDown(this.cursors.left!) || Phaser.Input.Keyboard.JustDown(this.wasdKeys.A)) {
+      console.log('Sending move LEFT input');
       this.gameService.sendInput({ type: 'move', direction: Direction.LEFT });
     } else if (Phaser.Input.Keyboard.JustDown(this.cursors.right!) || Phaser.Input.Keyboard.JustDown(this.wasdKeys.D)) {
+      console.log('Sending move RIGHT input');
       this.gameService.sendInput({ type: 'move', direction: Direction.RIGHT });
     }
 
     // Firing
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+      console.log('Sending fire input');
       this.gameService.sendInput({ type: 'fire' });
     }
   }

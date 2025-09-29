@@ -89,6 +89,12 @@ export class ReadyScene extends Phaser.Scene {
     const room = this.gameService.getRoom();
     if (!room) return;
 
+    // Safety check: ensure camera is available
+    if (!this.cameras.main) {
+      console.warn('Camera not available yet, skipping player display update');
+      return;
+    }
+
     // Clear existing player texts
     this.playerTexts.forEach(text => text.destroy());
     this.playerTexts = [];

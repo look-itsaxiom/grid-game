@@ -77,11 +77,19 @@ app.get('/api/rooms', async (req, res) => {
 app.post('/api/test/create-room', async (req, res) => {
     try {
         console.log('Test endpoint: Creating room...');
-        const room = await gameServer.create('grid_game');
-        console.log(`Test room created: ${room.roomId}`);
+        // Manually create a room entry in our registry for testing
+        const roomId = `test_room_${Date.now()}`;
+        roomRegistry.set(roomId, {
+            roomId: roomId,
+            playerCount: 0,
+            maxPlayers: 4,
+            gameState: 'lobby',
+            created: new Date()
+        });
+        console.log(`Test room created in registry: ${roomId}`);
         res.json({
             success: true,
-            roomId: room.roomId,
+            roomId: roomId,
             message: 'Test room created successfully'
         });
     }

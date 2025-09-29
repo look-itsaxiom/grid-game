@@ -107,21 +107,32 @@ export class GridGameRoom extends Room {
         return positions[playerIndex] || { x: 0, y: 0 };
     }
     handleInput(client, message) {
+        console.log(`Received input from ${client.sessionId}: ${JSON.stringify(message)}`);
         const player = this.state.players.get(client.sessionId);
-        if (!player)
+        if (!player) {
+            console.log(`Player ${client.sessionId} not found`);
             return;
+        }
         switch (message.type) {
             case 'ready':
                 this.handleReady(client);
                 break;
             case 'move':
+                console.log(`Game state: ${this.state.gameState}, Player alive: ${player.alive}, Direction: ${message.direction}`);
                 if (this.state.gameState === GameState.PLAYING && message.direction) {
                     this.handleMove(client, message.direction);
                 }
+                else {
+                    console.log(`Move rejected - gameState: ${this.state.gameState}, direction: ${message.direction}`);
+                }
                 break;
             case 'fire':
+                console.log(`Game state: ${this.state.gameState}, Player alive: ${player.alive}`);
                 if (this.state.gameState === GameState.PLAYING) {
                     this.handleFire(client);
+                }
+                else {
+                    console.log(`Fire rejected - gameState: ${this.state.gameState}`);
                 }
                 break;
         }
@@ -158,23 +169,37 @@ export class GridGameRoom extends Room {
             maxPlayers: MAX_PLAYERS
         });
         // Reset all players
-        Array.from(this.state.players.values()).forEach((player) => {
+        Array.from(this.state.players.values()).forEach((player, index) => {
             player.lives = PLAYER_LIVES;
             player.alive = true;
             player.ready = false;
+            // Reset positions to starting positions
+            const playerIndex = Array.from(this.state.players.keys()).indexOf(player.id);
+            const startPos = this.getStartingPosition(playerIndex);
+            player.x = startPos.x;
+            player.y = startPos.y;
+            player.facing = Direction.UP; // Initialize facing direction
         });
     }
     handleMove(client, direction) {
         const player = this.state.players.get(client.sessionId);
-        if (!player || !player.alive)
+        if (!player || !player.alive) {
+            console.log(`Move failed - player: ${!!player}, alive: ${player?.alive}`);
             return;
+        }
+        const oldPos = { x: player.x, y: player.y };
         const newPos = this.getNewPosition(player, direction);
+        console.log(`Attempting move from (${oldPos.x},${oldPos.y}) to (${newPos.x},${newPos.y})`);
         if (this.isValidPosition(newPos)) {
             player.x = newPos.x;
             player.y = newPos.y;
             player.facing = direction;
+            console.log(`Move successful - player now at (${player.x},${player.y})`);
             // Check if player is on an enemy colored cell
             this.checkPlayerCollision(player);
+        }
+        else {
+            console.log(`Move invalid - position (${newPos.x},${newPos.y}) out of bounds`);
         }
     }
     getNewPosition(player, direction) {
