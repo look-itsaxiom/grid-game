@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { PlayerNameScene } from './scenes/PlayerNameScene';
 import { StartScene } from './scenes/StartScene';
 import { LobbyFinderScene } from './scenes/LobbyFinderScene';
 import { ReadyScene } from './scenes/ReadyScene';
@@ -13,6 +14,7 @@ const config: Phaser.Types.Core.GameConfig = {
   parent: 'game-container',
   backgroundColor: '#2c3e50',
   scene: [
+    PlayerNameScene,
     StartScene,
     LobbyFinderScene, 
     ReadyScene,

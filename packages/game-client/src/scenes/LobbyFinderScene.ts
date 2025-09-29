@@ -5,6 +5,8 @@ export class LobbyFinderScene extends Phaser.Scene {
   private statusText?: Phaser.GameObjects.Text;
   private roomListContainer?: Phaser.GameObjects.Container;
   private refreshButton?: Phaser.GameObjects.Rectangle;
+  private roomNameInput?: HTMLInputElement;
+  private showingCreateDialog: boolean = false;
 
   constructor() {
     super({ key: 'LobbyFinderScene' });
@@ -58,16 +60,8 @@ export class LobbyFinderScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // Button interactions
-    createButton.on('pointerup', async () => {
-      this.statusText!.setText('Creating new room...');
-      try {
-        await this.gameService.connect();
-        await this.gameService.createRoom();
-        this.scene.start('ReadyScene');
-      } catch (error) {
-        console.error('Failed to create room:', error);
-        this.statusText!.setText('Failed to create room. Try again?');
-      }
+    createButton.on('pointerup', () => {
+      this.showCreateDialog();
     });
 
     this.refreshButton.on('pointerup', () => {
@@ -90,6 +84,129 @@ export class LobbyFinderScene extends Phaser.Scene {
 
     // Load initial room list
     this.refreshRoomList();
+  }
+
+  private showCreateDialog() {
+    if (this.showingCreateDialog) return;
+    this.showingCreateDialog = true;
+
+    const { width, height } = this.cameras.main;
+
+    // Dialog background
+    const dialogBg = this.add.rectangle(width / 2, height / 2, 400, 250, 0x2c3e50);
+    dialogBg.setStrokeStyle(2, 0x3498db);
+
+    // Dialog title
+    this.add.text(width / 2, height / 2 - 80, 'Create New Lobby', {
+      fontSize: '24px',
+      color: '#ecf0f1'
+    }).setOrigin(0.5);
+
+    // Room name label
+    this.add.text(width / 2, height / 2 - 40, 'Lobby Name (optional):', {
+      fontSize: '16px',
+      color: '#bdc3c7'
+    }).setOrigin(0.5);
+
+    // Room name input background
+    const inputBg = this.add.rectangle(width / 2, height / 2, 300, 40, 0x34495e);
+    inputBg.setStrokeStyle(1, 0x3498db);
+
+    // Create HTML input element
+    this.roomNameInput = document.createElement('input');
+    this.roomNameInput.type = 'text';
+    this.roomNameInput.placeholder = 'Enter lobby name...';
+    this.roomNameInput.maxLength = 30;
+    this.roomNameInput.style.position = 'absolute';
+    this.roomNameInput.style.left = (width / 2 - 150) + 'px';
+    this.roomNameInput.style.top = (height / 2 - 20) + 'px';
+    this.roomNameInput.style.width = '300px';
+    this.roomNameInput.style.height = '40px';
+    this.roomNameInput.style.fontSize = '16px';
+    this.roomNameInput.style.textAlign = 'center';
+    this.roomNameInput.style.border = 'none';
+    this.roomNameInput.style.borderRadius = '5px';
+    this.roomNameInput.style.backgroundColor = '#34495e';
+    this.roomNameInput.style.color = '#ecf0f1';
+    this.roomNameInput.style.outline = 'none';
+    this.roomNameInput.style.zIndex = '1000';
+
+    document.body.appendChild(this.roomNameInput);
+    this.roomNameInput.focus();
+
+    // Create button
+    const createBtn = this.add.rectangle(width / 2 - 70, height / 2 + 60, 120, 40, 0x27ae60);
+    createBtn.setInteractive({ useHandCursor: true });
+    
+    this.add.text(width / 2 - 70, height / 2 + 60, 'CREATE', {
+      fontSize: '16px',
+      color: '#ffffff'
+    }).setOrigin(0.5);
+
+    // Cancel button
+    const cancelBtn = this.add.rectangle(width / 2 + 70, height / 2 + 60, 120, 40, 0x95a5a6);
+    cancelBtn.setInteractive({ useHandCursor: true });
+    
+    this.add.text(width / 2 + 70, height / 2 + 60, 'CANCEL', {
+      fontSize: '16px',
+      color: '#ffffff'
+    }).setOrigin(0.5);
+
+    // Store dialog elements for cleanup
+    const dialogElements = [dialogBg, createBtn, cancelBtn];
+
+    // Button interactions
+    createBtn.on('pointerup', () => {
+      this.createRoom();
+      this.cleanupCreateDialog(dialogElements);
+    });
+
+    cancelBtn.on('pointerup', () => {
+      this.cleanupCreateDialog(dialogElements);
+    });
+
+    // Handle Enter key
+    this.roomNameInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        this.createRoom();
+        this.cleanupCreateDialog(dialogElements);
+      } else if (event.key === 'Escape') {
+        this.cleanupCreateDialog(dialogElements);
+      }
+    });
+
+    // Hover effects
+    createBtn.on('pointerover', () => createBtn.setFillStyle(0x2ecc71));
+    createBtn.on('pointerout', () => createBtn.setFillStyle(0x27ae60));
+    
+    cancelBtn.on('pointerover', () => cancelBtn.setFillStyle(0xa4b0b0));
+    cancelBtn.on('pointerout', () => cancelBtn.setFillStyle(0x95a5a6));
+  }
+
+  private cleanupCreateDialog(dialogElements: Phaser.GameObjects.GameObject[]) {
+    // Clean up HTML input
+    if (this.roomNameInput && document.body.contains(this.roomNameInput)) {
+      document.body.removeChild(this.roomNameInput);
+      this.roomNameInput = undefined;
+    }
+
+    // Clean up dialog elements
+    dialogElements.forEach(element => element.destroy());
+    
+    this.showingCreateDialog = false;
+  }
+
+  private async createRoom() {
+    const roomName = this.roomNameInput?.value?.trim() || '';
+    this.statusText!.setText('Creating new room...');
+    try {
+      await this.gameService.connect();
+      await this.gameService.createRoom(roomName);
+      this.scene.start('ReadyScene');
+    } catch (error) {
+      console.error('Failed to create room:', error);
+      this.statusText!.setText('Failed to create room. Try again?');
+    }
   }
 
   async refreshRoomList() {
@@ -124,9 +241,10 @@ export class LobbyFinderScene extends Phaser.Scene {
       const roomBg = this.add.rectangle(0, y, 400, 50, 0x34495e);
       roomBg.setInteractive({ useHandCursor: true });
       
-      // Room info text
+      // Room info text - show room name if available, otherwise fallback to room ID
+      const displayName = room.metadata?.roomName || `Room ${room.roomId.substring(0, 8)}...`;
       const roomText = this.add.text(-180, y - 10, 
-        `Room ${room.roomId.substring(0, 8)}...`, {
+        displayName, {
           fontSize: '16px',
           color: '#ecf0f1'
         }).setOrigin(0, 0.5);
@@ -175,6 +293,14 @@ export class LobbyFinderScene extends Phaser.Scene {
       this.statusText!.setText('Failed to join room. It may be full or no longer exist.');
       // Refresh the room list after a failed join
       setTimeout(() => this.refreshRoomList(), 2000);
+    }
+  }
+
+  cleanup() {
+    // Clean up HTML input if scene is destroyed
+    if (this.roomNameInput && document.body.contains(this.roomNameInput)) {
+      document.body.removeChild(this.roomNameInput);
+      this.roomNameInput = undefined;
     }
   }
 }

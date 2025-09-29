@@ -20,19 +20,19 @@ export class GameOverScene extends Phaser.Scene {
     // Winner announcement
     if (data.winner) {
       const room = this.gameService.getRoom();
-      let winnerColor = 'Unknown';
+      let winnerName = 'Unknown Player';
       
       if (room) {
         const winnerPlayer = room.state.players.get(data.winner);
         if (winnerPlayer) {
-          winnerColor = winnerPlayer.color;
+          winnerName = winnerPlayer.name || `${winnerPlayer.color.toUpperCase()} Player`;
         }
       }
 
       const isMyWin = room?.sessionId === data.winner;
+      const displayText = isMyWin ? 'You Win!' : `${winnerName} Wins!`;
       
-      this.add.text(width / 2, 220, 
-        isMyWin ? 'You Win!' : `${winnerColor.toUpperCase()} Player Wins!`, {
+      this.add.text(width / 2, 220, displayText, {
           fontSize: '32px',
           color: isMyWin ? '#27ae60' : '#e74c3c'
         }).setOrigin(0.5);

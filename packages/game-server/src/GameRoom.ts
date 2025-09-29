@@ -7,7 +7,7 @@ import {
   GRID_SIZE, MAX_PLAYERS, PLAYER_LIVES, INVULNERABILITY_DURATION,
   LASER_CHARGE_TIME, LASER_PROGRESSION_DELAY,
   PlayerColor, CellState, GameState, Direction, 
-  InputMessage, Position 
+  InputMessage, Position, CreateRoomOptions, JoinRoomOptions
 } from 'shared';
 
 const FIRE_DELAY = 500; // ms
@@ -20,16 +20,22 @@ export class GridGameRoom extends Room<GameRoom> {
   private chargingTimers: Map<string, NodeJS.Timeout> = new Map();
   private invulnerabilityTimers: Map<string, NodeJS.Timeout> = new Map();
   
-  onCreate() {
+  onCreate(options: CreateRoomOptions = {}) {
     this.setState(new GameRoom());
     this.initializeGrid();
     this.maxClients = MAX_PLAYERS;
+    
+    // Set room name if provided
+    if (options.roomName) {
+      this.state.roomName = options.roomName;
+    }
     
     // Set room metadata for lobby browser
     this.setMetadata({
       gameState: GameState.LOBBY,
       playerCount: 0,
-      maxPlayers: MAX_PLAYERS
+      maxPlayers: MAX_PLAYERS,
+      roomName: options.roomName || ''
     });
     
     this.onMessage('input', (client: any, message: InputMessage) => {
@@ -42,7 +48,7 @@ export class GridGameRoom extends Room<GameRoom> {
     }, 16); // ~60fps
   }
 
-  onJoin(client: any) {
+  onJoin(client: any, options: JoinRoomOptions = {}) {
     console.log(`Player ${client.sessionId} joined`);
     
     // Check if room is already full
@@ -54,6 +60,7 @@ export class GridGameRoom extends Room<GameRoom> {
     
     const player = new Player();
     player.id = client.sessionId;
+    player.name = options.playerName || 'Anonymous Player';
     player.color = this.getNextAvailableColor();
     player.lives = PLAYER_LIVES;
     player.alive = true;
@@ -72,10 +79,11 @@ export class GridGameRoom extends Room<GameRoom> {
     this.setMetadata({
       gameState: this.state.gameState,
       playerCount: this.state.players.size,
-      maxPlayers: MAX_PLAYERS
+      maxPlayers: MAX_PLAYERS,
+      roomName: this.state.roomName
     });
     
-    console.log(`Player ${client.sessionId} added successfully. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
+    console.log(`Player ${client.sessionId} (${player.name}) added successfully. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
   }
 
   onLeave(client: any) {
@@ -89,7 +97,8 @@ export class GridGameRoom extends Room<GameRoom> {
       this.setMetadata({
         gameState: this.state.gameState,
         playerCount: this.state.players.size,
-        maxPlayers: MAX_PLAYERS
+        maxPlayers: MAX_PLAYERS,
+        roomName: this.state.roomName
       });
       
       console.log(`Player ${client.sessionId} removed. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
@@ -191,7 +200,8 @@ export class GridGameRoom extends Room<GameRoom> {
     this.setMetadata({
       gameState: this.state.gameState,
       playerCount: this.state.players.size,
-      maxPlayers: MAX_PLAYERS
+      maxPlayers: MAX_PLAYERS,
+      roomName: this.state.roomName
     });
     
     setTimeout(() => {
@@ -206,7 +216,8 @@ export class GridGameRoom extends Room<GameRoom> {
     this.setMetadata({
       gameState: this.state.gameState,
       playerCount: this.state.players.size,
-      maxPlayers: MAX_PLAYERS
+      maxPlayers: MAX_PLAYERS,
+      roomName: this.state.roomName
     });
     
     // Reset all players
@@ -431,7 +442,8 @@ export class GridGameRoom extends Room<GameRoom> {
     this.setMetadata({
       gameState: this.state.gameState,
       playerCount: this.state.players.size,
-      maxPlayers: MAX_PLAYERS
+      maxPlayers: MAX_PLAYERS,
+      roomName: this.state.roomName
     });
     
     // Return to lobby after delay
@@ -447,7 +459,8 @@ export class GridGameRoom extends Room<GameRoom> {
     this.setMetadata({
       gameState: this.state.gameState,
       playerCount: this.state.players.size,
-      maxPlayers: MAX_PLAYERS
+      maxPlayers: MAX_PLAYERS,
+      roomName: this.state.roomName
     });
     
     // Reset grid

@@ -13,6 +13,7 @@ export class Player extends Schema {
     constructor() {
         super(...arguments);
         this.id = '';
+        this.name = '';
         this.color = PlayerColor.RED;
         this.x = 0;
         this.y = 0;
@@ -28,6 +29,10 @@ __decorate([
     type('string'),
     __metadata("design:type", String)
 ], Player.prototype, "id", void 0);
+__decorate([
+    type('string'),
+    __metadata("design:type", String)
+], Player.prototype, "name", void 0);
 __decorate([
     type('string'),
     __metadata("design:type", String)
@@ -93,6 +98,7 @@ export class GameRoom extends Schema {
     constructor() {
         super(...arguments);
         this.gameState = 'lobby';
+        this.roomName = '';
         this.players = new MapSchema();
         this.grid = new MapSchema();
         this.winner = '';
@@ -104,6 +110,10 @@ __decorate([
     type('string'),
     __metadata("design:type", String)
 ], GameRoom.prototype, "gameState", void 0);
+__decorate([
+    type('string'),
+    __metadata("design:type", String)
+], GameRoom.prototype, "roomName", void 0);
 __decorate([
     type({ map: Player }),
     __metadata("design:type", Object)

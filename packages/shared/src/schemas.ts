@@ -3,6 +3,7 @@ import { PlayerColor, CellState, Direction } from './types.js';
 
 export class Player extends Schema {
   @type('string') id: string = '';
+  @type('string') name: string = '';
   @type('string') color: PlayerColor = PlayerColor.RED;
   @type('number') x: number = 0;
   @type('number') y: number = 0;
@@ -23,6 +24,7 @@ export class GridCell extends Schema {
 
 export class GameRoom extends Schema {
   @type('string') gameState: string = 'lobby';
+  @type('string') roomName: string = '';
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: GridCell }) grid = new MapSchema<GridCell>();
   @type('string') winner: string = '';

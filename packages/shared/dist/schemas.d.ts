@@ -2,6 +2,7 @@ import { Schema, MapSchema } from '@colyseus/schema';
 import { PlayerColor, CellState, Direction } from './types.js';
 export declare class Player extends Schema {
     id: string;
+    name: string;
     color: PlayerColor;
     x: number;
     y: number;
@@ -20,6 +21,7 @@ export declare class GridCell extends Schema {
 }
 export declare class GameRoom extends Schema {
     gameState: string;
+    roomName: string;
     players: MapSchema<Player, string>;
     grid: MapSchema<GridCell, string>;
     winner: string;

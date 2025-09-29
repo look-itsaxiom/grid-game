@@ -13,15 +13,20 @@ export class GridGameRoom extends Room {
         this.chargingTimers = new Map();
         this.invulnerabilityTimers = new Map();
     }
-    onCreate() {
+    onCreate(options = {}) {
         this.setState(new GameRoom());
         this.initializeGrid();
         this.maxClients = MAX_PLAYERS;
+        // Set room name if provided
+        if (options.roomName) {
+            this.state.roomName = options.roomName;
+        }
         // Set room metadata for lobby browser
         this.setMetadata({
             gameState: GameState.LOBBY,
             playerCount: 0,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: options.roomName || ''
         });
         this.onMessage('input', (client, message) => {
             this.handleInput(client, message);
@@ -31,7 +36,7 @@ export class GridGameRoom extends Room {
             this.gameLoop();
         }, 16); // ~60fps
     }
-    onJoin(client) {
+    onJoin(client, options = {}) {
         console.log(`Player ${client.sessionId} joined`);
         // Check if room is already full
         const currentPlayerCount = this.state.players.size;
@@ -41,6 +46,7 @@ export class GridGameRoom extends Room {
         }
         const player = new Player();
         player.id = client.sessionId;
+        player.name = options.playerName || 'Anonymous Player';
         player.color = this.getNextAvailableColor();
         player.lives = PLAYER_LIVES;
         player.alive = true;
@@ -56,9 +62,10 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
-        console.log(`Player ${client.sessionId} added successfully. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
+        console.log(`Player ${client.sessionId} (${player.name}) added successfully. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
     }
     onLeave(client) {
         console.log(`Player ${client.sessionId} left`);
@@ -69,7 +76,8 @@ export class GridGameRoom extends Room {
             this.setMetadata({
                 gameState: this.state.gameState,
                 playerCount: this.state.players.size,
-                maxPlayers: MAX_PLAYERS
+                maxPlayers: MAX_PLAYERS,
+                roomName: this.state.roomName
             });
             console.log(`Player ${client.sessionId} removed. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
         }
@@ -162,7 +170,8 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
         setTimeout(() => {
             this.startGame();
@@ -174,7 +183,8 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
         // Reset all players
         Array.from(this.state.players.values()).forEach((player, index) => {
@@ -363,7 +373,8 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
         // Return to lobby after delay
         setTimeout(() => {
@@ -376,7 +387,8 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
         // Reset grid
         this.initializeGrid();
