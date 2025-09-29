@@ -11,6 +11,7 @@ import {
 } from 'shared';
 
 const FIRE_DELAY = 500; // ms
+const MOVE_DELAY = 100; // ms - prevent movement spam
 const COLOR_DURATION = 2000; // ms  
 const READY_COUNTDOWN = 3000; // ms
 
@@ -19,6 +20,8 @@ export class GridGameRoom extends Room<GameRoom> {
   private colorTimers: Map<string, NodeJS.Timeout> = new Map();
   private chargingTimers: Map<string, NodeJS.Timeout> = new Map();
   private invulnerabilityTimers: Map<string, NodeJS.Timeout> = new Map();
+  private lastFireTime: Map<string, number> = new Map();
+  private lastMoveTime: Map<string, number> = new Map();
   
   onCreate(options: CreateRoomOptions = {}) {
     this.setState(new GameRoom());
@@ -93,6 +96,10 @@ export class GridGameRoom extends Room<GameRoom> {
     if (this.state.players.has(client.sessionId)) {
       this.state.players.delete(client.sessionId);
       
+      // Clean up rate limiting timers
+      this.lastFireTime.delete(client.sessionId);
+      this.lastMoveTime.delete(client.sessionId);
+      
       // Update room metadata
       this.setMetadata({
         gameState: this.state.gameState,
@@ -119,6 +126,10 @@ export class GridGameRoom extends Room<GameRoom> {
     this.colorTimers.forEach(timer => clearTimeout(timer));
     this.chargingTimers.forEach(timer => clearTimeout(timer));
     this.invulnerabilityTimers.forEach(timer => clearTimeout(timer));
+    
+    // Clear rate limiting maps
+    this.lastFireTime.clear();
+    this.lastMoveTime.clear();
   }
 
   private initializeGrid() {
@@ -251,6 +262,15 @@ export class GridGameRoom extends Room<GameRoom> {
       return;
     }
 
+    // Rate limiting for movement
+    const now = Date.now();
+    const lastMove = this.lastMoveTime.get(client.sessionId) || 0;
+    if (now - lastMove < MOVE_DELAY) {
+      console.log(`Move rejected - rate limited (${now - lastMove}ms < ${MOVE_DELAY}ms)`);
+      return;
+    }
+    this.lastMoveTime.set(client.sessionId, now);
+
     const oldPos = { x: player.x, y: player.y };
     const newPos = this.getNewPosition(player, direction);
     console.log(`Attempting move from (${oldPos.x},${oldPos.y}) to (${newPos.x},${newPos.y})`);
@@ -298,6 +318,15 @@ export class GridGameRoom extends Room<GameRoom> {
   private handleFire(client: any) {
     const player = this.state.players.get(client.sessionId);
     if (!player || !player.alive || player.invulnerable) return;
+
+    // Rate limiting for firing
+    const now = Date.now();
+    const lastFire = this.lastFireTime.get(client.sessionId) || 0;
+    if (now - lastFire < FIRE_DELAY) {
+      console.log(`Fire rejected - rate limited (${now - lastFire}ms < ${FIRE_DELAY}ms)`);
+      return;
+    }
+    this.lastFireTime.set(client.sessionId, now);
 
     this.startProgressiveLaser(player);
   }
@@ -494,16 +523,18 @@ export class GridGameRoom extends Room<GameRoom> {
       this.state.readyCountdown = Math.max(0, this.state.readyCountdown - 16);
     }
     
-    // Update invulnerability timers
+    // Update invulnerability timers - only for invulnerable players
     Array.from(this.state.players.values()).forEach((player: any) => {
       if (player.invulnerable && player.invulnerabilityTimer > 0) {
         player.invulnerabilityTimer = Math.max(0, player.invulnerabilityTimer - 16);
       }
     });
     
-    // Update charging timers
-    this.state.grid.forEach((cell: GridCell) => {
-      if (cell.charging && cell.chargingTimer > 0) {
+    // Update charging timers - only for cells that are actually charging
+    // This is more efficient than checking all grid cells
+    this.chargingTimers.forEach((timer, cellKey) => {
+      const cell = this.state.grid.get(cellKey);
+      if (cell && cell.charging && cell.chargingTimer > 0) {
         cell.chargingTimer = Math.max(0, cell.chargingTimer - 16);
       }
     });

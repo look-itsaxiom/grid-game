@@ -4,6 +4,7 @@ const { Room, Client } = require('colyseus');
 import { GameRoom, Player, GridCell } from 'shared';
 import { GRID_SIZE, MAX_PLAYERS, PLAYER_LIVES, INVULNERABILITY_DURATION, LASER_CHARGE_TIME, LASER_PROGRESSION_DELAY, PlayerColor, CellState, GameState, Direction } from 'shared';
 const FIRE_DELAY = 500; // ms
+const MOVE_DELAY = 100; // ms - prevent movement spam
 const COLOR_DURATION = 2000; // ms  
 const READY_COUNTDOWN = 3000; // ms
 export class GridGameRoom extends Room {
@@ -12,6 +13,8 @@ export class GridGameRoom extends Room {
         this.colorTimers = new Map();
         this.chargingTimers = new Map();
         this.invulnerabilityTimers = new Map();
+        this.lastFireTime = new Map();
+        this.lastMoveTime = new Map();
     }
     onCreate(options = {}) {
         this.setState(new GameRoom());
@@ -72,6 +75,9 @@ export class GridGameRoom extends Room {
         // Only delete if the player actually exists in the room
         if (this.state.players.has(client.sessionId)) {
             this.state.players.delete(client.sessionId);
+            // Clean up rate limiting timers
+            this.lastFireTime.delete(client.sessionId);
+            this.lastMoveTime.delete(client.sessionId);
             // Update room metadata
             this.setMetadata({
                 gameState: this.state.gameState,
@@ -96,6 +102,9 @@ export class GridGameRoom extends Room {
         this.colorTimers.forEach(timer => clearTimeout(timer));
         this.chargingTimers.forEach(timer => clearTimeout(timer));
         this.invulnerabilityTimers.forEach(timer => clearTimeout(timer));
+        // Clear rate limiting maps
+        this.lastFireTime.clear();
+        this.lastMoveTime.clear();
     }
     initializeGrid() {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -213,6 +222,14 @@ export class GridGameRoom extends Room {
             console.log(`Move failed - player: ${!!player}, alive: ${player?.alive}`);
             return;
         }
+        // Rate limiting for movement
+        const now = Date.now();
+        const lastMove = this.lastMoveTime.get(client.sessionId) || 0;
+        if (now - lastMove < MOVE_DELAY) {
+            console.log(`Move rejected - rate limited (${now - lastMove}ms < ${MOVE_DELAY}ms)`);
+            return;
+        }
+        this.lastMoveTime.set(client.sessionId, now);
         const oldPos = { x: player.x, y: player.y };
         const newPos = this.getNewPosition(player, direction);
         console.log(`Attempting move from (${oldPos.x},${oldPos.y}) to (${newPos.x},${newPos.y})`);
@@ -255,6 +272,14 @@ export class GridGameRoom extends Room {
         const player = this.state.players.get(client.sessionId);
         if (!player || !player.alive || player.invulnerable)
             return;
+        // Rate limiting for firing
+        const now = Date.now();
+        const lastFire = this.lastFireTime.get(client.sessionId) || 0;
+        if (now - lastFire < FIRE_DELAY) {
+            console.log(`Fire rejected - rate limited (${now - lastFire}ms < ${FIRE_DELAY}ms)`);
+            return;
+        }
+        this.lastFireTime.set(client.sessionId, now);
         this.startProgressiveLaser(player);
     }
     startProgressiveLaser(player) {
@@ -416,15 +441,17 @@ export class GridGameRoom extends Room {
         if (this.state.readyCountdown > 0) {
             this.state.readyCountdown = Math.max(0, this.state.readyCountdown - 16);
         }
-        // Update invulnerability timers
+        // Update invulnerability timers - only for invulnerable players
         Array.from(this.state.players.values()).forEach((player) => {
             if (player.invulnerable && player.invulnerabilityTimer > 0) {
                 player.invulnerabilityTimer = Math.max(0, player.invulnerabilityTimer - 16);
             }
         });
-        // Update charging timers
-        this.state.grid.forEach((cell) => {
-            if (cell.charging && cell.chargingTimer > 0) {
+        // Update charging timers - only for cells that are actually charging
+        // This is more efficient than checking all grid cells
+        this.chargingTimers.forEach((timer, cellKey) => {
+            const cell = this.state.grid.get(cellKey);
+            if (cell && cell.charging && cell.chargingTimer > 0) {
                 cell.chargingTimer = Math.max(0, cell.chargingTimer - 16);
             }
         });

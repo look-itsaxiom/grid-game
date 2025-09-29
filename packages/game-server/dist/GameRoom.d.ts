@@ -6,6 +6,8 @@ export declare class GridGameRoom extends Room<GameRoom> {
     private colorTimers;
     private chargingTimers;
     private invulnerabilityTimers;
+    private lastFireTime;
+    private lastMoveTime;
     onCreate(options?: CreateRoomOptions): void;
     onJoin(client: any, options?: JoinRoomOptions): void;
     onLeave(client: any): void;
