@@ -6,6 +6,7 @@ export class GameScene extends Phaser.Scene {
   private gameService: GameService;
   private gridGraphics?: Phaser.GameObjects.Graphics;
   private playerSprites: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  private playerDirIndicators: Map<string, Phaser.GameObjects.Triangle> = new Map();
   private cellSize = 40;
   private gridOffsetX = 100;
   private gridOffsetY = 80;
@@ -108,21 +109,29 @@ export class GameScene extends Phaser.Scene {
         const cell = room.state.grid.get(cellKey);
         
         let color = 0x34495e; // neutral/dark gray
+        let strokeColor = 0x7f8c8d; // normal border
         
         if (cell) {
-          switch (cell.state) {
-            case CellState.RED:
-              color = 0xe74c3c;
-              break;
-            case CellState.BLUE:
-              color = 0x3498db;
-              break;
-            case CellState.GREEN:
-              color = 0x27ae60;
-              break;
-            case CellState.YELLOW:
-              color = 0xf1c40f;
-              break;
+          // Handle charging state
+          if (cell.charging) {
+            color = 0xffffff; // White for charging
+            strokeColor = 0xf39c12; // Orange border for charging
+          } else {
+            // Handle colored states
+            switch (cell.state) {
+              case CellState.RED:
+                color = 0xe74c3c;
+                break;
+              case CellState.BLUE:
+                color = 0x3498db;
+                break;
+              case CellState.GREEN:
+                color = 0x27ae60;
+                break;
+              case CellState.YELLOW:
+                color = 0xf1c40f;
+                break;
+            }
           }
         }
 
@@ -132,8 +141,8 @@ export class GameScene extends Phaser.Scene {
         this.gridGraphics.fillStyle(color);
         this.gridGraphics.fillRect(screenX, screenY, this.cellSize - 2, this.cellSize - 2);
         
-        // Grid lines
-        this.gridGraphics.lineStyle(1, 0x7f8c8d);
+        // Grid lines with appropriate color
+        this.gridGraphics.lineStyle(cell?.charging ? 2 : 1, strokeColor);
         this.gridGraphics.strokeRect(screenX, screenY, this.cellSize - 2, this.cellSize - 2);
       }
     }
@@ -143,9 +152,11 @@ export class GameScene extends Phaser.Scene {
     const room = this.gameService.getRoom();
     if (!room) return;
 
-    // Clear existing player sprites
+    // Clear existing player sprites and direction indicators
     this.playerSprites.forEach(sprite => sprite.destroy());
     this.playerSprites.clear();
+    this.playerDirIndicators.forEach(indicator => indicator.destroy());
+    this.playerDirIndicators.clear();
 
     // Create new player sprites
     room.state.players.forEach((player: Player, playerId: string) => {
@@ -198,7 +209,21 @@ export class GameScene extends Phaser.Scene {
           break;
       }
 
+      // Apply blinking effect if invulnerable
+      if (player.invulnerable) {
+        // Create blinking tween
+        this.tweens.add({
+          targets: [sprite, dirIndicator],
+          alpha: 0.3,
+          duration: 250,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Power2'
+        });
+      }
+
       this.playerSprites.set(playerId, sprite);
+      this.playerDirIndicators.set(playerId, dirIndicator);
     });
   }
 

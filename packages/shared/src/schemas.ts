@@ -10,11 +10,15 @@ export class Player extends Schema {
   @type('boolean') ready: boolean = false;
   @type('boolean') alive: boolean = true;
   @type('string') facing: Direction = Direction.UP;
+  @type('boolean') invulnerable: boolean = false;
+  @type('number') invulnerabilityTimer: number = 0;
 }
 
 export class GridCell extends Schema {
   @type('string') state: CellState = CellState.NEUTRAL;
   @type('number') colorTimer: number = 0;
+  @type('boolean') charging: boolean = false;
+  @type('number') chargingTimer: number = 0;
 }
 
 export class GameRoom extends Schema {
