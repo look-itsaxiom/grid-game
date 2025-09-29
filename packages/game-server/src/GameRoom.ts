@@ -4,7 +4,8 @@ const { Room, Client } = require('colyseus');
 
 import { GameRoom, Player, GridCell } from 'shared';
 import { 
-  GRID_SIZE, MAX_PLAYERS, PLAYER_LIVES, 
+  GRID_SIZE, MAX_PLAYERS, PLAYER_LIVES, INVULNERABILITY_DURATION,
+  LASER_CHARGE_TIME, LASER_PROGRESSION_DELAY,
   PlayerColor, CellState, GameState, Direction, 
   InputMessage, Position 
 } from 'shared';
@@ -16,6 +17,8 @@ const READY_COUNTDOWN = 3000; // ms
 export class GridGameRoom extends Room<GameRoom> {
   private gameLoopInterval?: NodeJS.Timeout;
   private colorTimers: Map<string, NodeJS.Timeout> = new Map();
+  private chargingTimers: Map<string, NodeJS.Timeout> = new Map();
+  private invulnerabilityTimers: Map<string, NodeJS.Timeout> = new Map();
   
   onCreate() {
     this.setState(new GameRoom());
@@ -55,6 +58,8 @@ export class GridGameRoom extends Room<GameRoom> {
     player.lives = PLAYER_LIVES;
     player.alive = true;
     player.ready = false;
+    player.invulnerable = false;
+    player.invulnerabilityTimer = 0;
     
     // Set starting position based on current player count
     const startPos = this.getStartingPosition(currentPlayerCount);
@@ -103,6 +108,8 @@ export class GridGameRoom extends Room<GameRoom> {
       clearInterval(this.gameLoopInterval);
     }
     this.colorTimers.forEach(timer => clearTimeout(timer));
+    this.chargingTimers.forEach(timer => clearTimeout(timer));
+    this.invulnerabilityTimers.forEach(timer => clearTimeout(timer));
   }
 
   private initializeGrid() {
@@ -110,6 +117,8 @@ export class GridGameRoom extends Room<GameRoom> {
       for (let y = 0; y < GRID_SIZE; y++) {
         const cell = new GridCell();
         cell.state = CellState.NEUTRAL;
+        cell.charging = false;
+        cell.chargingTimer = 0;
         this.state.grid.set(`${x},${y}`, cell);
       }
     }
@@ -205,6 +214,15 @@ export class GridGameRoom extends Room<GameRoom> {
       player.lives = PLAYER_LIVES;
       player.alive = true;
       player.ready = false;
+      player.invulnerable = false;
+      player.invulnerabilityTimer = 0;
+      
+      // Clear any existing invulnerability timers
+      const existingTimer = this.invulnerabilityTimers.get(player.id);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.invulnerabilityTimers.delete(player.id);
+      }
       
       // Reset positions to starting positions
       const playerIndex = Array.from(this.state.players.keys()).indexOf(player.id);
@@ -232,8 +250,10 @@ export class GridGameRoom extends Room<GameRoom> {
       player.facing = direction;
       console.log(`Move successful - player now at (${player.x},${player.y})`);
       
-      // Check if player is on an enemy colored cell
-      this.checkPlayerCollision(player);
+      // Check if player is on an enemy colored cell (only if not invulnerable)
+      if (!player.invulnerable) {
+        this.checkPlayerCollision(player);
+      }
     } else {
       console.log(`Move invalid - position (${newPos.x},${newPos.y}) out of bounds`);
     }
@@ -266,19 +286,17 @@ export class GridGameRoom extends Room<GameRoom> {
 
   private handleFire(client: any) {
     const player = this.state.players.get(client.sessionId);
-    if (!player || !player.alive) return;
+    if (!player || !player.alive || player.invulnerable) return;
 
-    setTimeout(() => {
-      this.fireLaser(player);
-    }, FIRE_DELAY);
+    this.startProgressiveLaser(player);
   }
 
-  private fireLaser(player: Player) {
+  private startProgressiveLaser(player: Player) {
     const direction = player.facing;
     const startPos = { x: player.x, y: player.y };
-    const affectedCells: string[] = [];
+    const targetCells: Position[] = [];
 
-    // Fire in the direction the player is facing
+    // Calculate all cells in the laser path
     let currentPos = { ...startPos };
     
     while (true) {
@@ -291,40 +309,69 @@ export class GridGameRoom extends Room<GameRoom> {
       if (!this.isValidPosition(nextPos)) break;
       
       currentPos = nextPos;
-      const cellKey = `${currentPos.x},${currentPos.y}`;
-      const cell = this.state.grid.get(cellKey);
-      if (cell) {
-        cell.state = player.color as any as CellState;
-        affectedCells.push(cellKey);
-        
-        // Check if any players are hit
-        this.checkPlayersAtPosition(currentPos, player.color);
-      }
+      targetCells.push({ ...currentPos });
     }
 
-    // Set timer to revert cells back to neutral
-    affectedCells.forEach(cellKey => {
-      const existingTimer = this.colorTimers.get(cellKey);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
+    // Start charging animation for all cells
+    targetCells.forEach((pos, index) => {
+      const cellKey = `${pos.x},${pos.y}`;
+      const cell = this.state.grid.get(cellKey);
+      if (cell) {
+        // Start charging effect
+        setTimeout(() => {
+          cell.charging = true;
+          cell.chargingTimer = LASER_CHARGE_TIME;
+          
+          // Clear any existing charging timer
+          const existingTimer = this.chargingTimers.get(cellKey);
+          if (existingTimer) {
+            clearTimeout(existingTimer);
+          }
+          
+          // Set timer to fire this specific cell
+          const fireTimer = setTimeout(() => {
+            this.fireCellLaser(cell, pos, player);
+            cell.charging = false;
+            cell.chargingTimer = 0;
+            this.chargingTimers.delete(cellKey);
+          }, LASER_CHARGE_TIME);
+          
+          this.chargingTimers.set(cellKey, fireTimer);
+        }, index * LASER_PROGRESSION_DELAY);
       }
-      
-      const timer = setTimeout(() => {
-        const cell = this.state.grid.get(cellKey);
-        if (cell) {
-          cell.state = CellState.NEUTRAL;
-        }
-        this.colorTimers.delete(cellKey);
-      }, COLOR_DURATION);
-      
-      this.colorTimers.set(cellKey, timer);
     });
+  }
+
+  private fireCellLaser(cell: GridCell, pos: Position, player: Player) {
+    const cellKey = `${pos.x},${pos.y}`;
+    
+    // Color the cell
+    cell.state = player.color as any as CellState;
+    
+    // Check if any players are hit at this position
+    this.checkPlayersAtPosition(pos, player.color);
+    
+    // Set timer to revert cell back to neutral
+    const existingColorTimer = this.colorTimers.get(cellKey);
+    if (existingColorTimer) {
+      clearTimeout(existingColorTimer);
+    }
+    
+    const colorTimer = setTimeout(() => {
+      const cell = this.state.grid.get(cellKey);
+      if (cell) {
+        cell.state = CellState.NEUTRAL;
+      }
+      this.colorTimers.delete(cellKey);
+    }, COLOR_DURATION);
+    
+    this.colorTimers.set(cellKey, colorTimer);
   }
 
   private checkPlayersAtPosition(pos: Position, attackerColor: PlayerColor) {
     Array.from(this.state.players.values()).forEach((player: any) => {
       if (player.x === pos.x && player.y === pos.y && 
-          player.color !== attackerColor && player.alive) {
+          player.color !== attackerColor && player.alive && !player.invulnerable) {
         this.hitPlayer(player);
       }
     });
@@ -350,7 +397,31 @@ export class GridGameRoom extends Room<GameRoom> {
       if (alivePlayers.length <= 1) {
         this.endGame(alivePlayers[0] as any);
       }
+    } else {
+      // Player still has lives, make them invulnerable
+      this.startInvulnerability(player);
     }
+  }
+
+  private startInvulnerability(player: Player) {
+    // Clear any existing invulnerability timer
+    const existingTimer = this.invulnerabilityTimers.get(player.id);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    // Set player as invulnerable
+    player.invulnerable = true;
+    player.invulnerabilityTimer = INVULNERABILITY_DURATION;
+    
+    // Set timer to remove invulnerability
+    const timer = setTimeout(() => {
+      player.invulnerable = false;
+      player.invulnerabilityTimer = 0;
+      this.invulnerabilityTimers.delete(player.id);
+    }, INVULNERABILITY_DURATION);
+    
+    this.invulnerabilityTimers.set(player.id, timer);
   }
 
   private endGame(winner?: Player) {
@@ -387,6 +458,15 @@ export class GridGameRoom extends Room<GameRoom> {
       player.ready = false;
       player.alive = true;
       player.lives = PLAYER_LIVES;
+      player.invulnerable = false;
+      player.invulnerabilityTimer = 0;
+      
+      // Clear any existing invulnerability timers
+      const existingTimer = this.invulnerabilityTimers.get(player.id);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.invulnerabilityTimers.delete(player.id);
+      }
       
       // Reset positions
       const playerIndex = Array.from(this.state.players.keys()).indexOf(player.id);
@@ -400,5 +480,19 @@ export class GridGameRoom extends Room<GameRoom> {
     if (this.state.readyCountdown > 0) {
       this.state.readyCountdown = Math.max(0, this.state.readyCountdown - 16);
     }
+    
+    // Update invulnerability timers
+    Array.from(this.state.players.values()).forEach((player: any) => {
+      if (player.invulnerable && player.invulnerabilityTimer > 0) {
+        player.invulnerabilityTimer = Math.max(0, player.invulnerabilityTimer - 16);
+      }
+    });
+    
+    // Update charging timers
+    this.state.grid.forEach((cell: GridCell) => {
+      if (cell.charging && cell.chargingTimer > 0) {
+        cell.chargingTimer = Math.max(0, cell.chargingTimer - 16);
+      }
+    });
   }
 }

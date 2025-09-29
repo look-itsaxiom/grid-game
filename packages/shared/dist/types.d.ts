@@ -1,6 +1,9 @@
 export declare const GRID_SIZE = 12;
 export declare const MAX_PLAYERS = 4;
 export declare const PLAYER_LIVES = 3;
+export declare const INVULNERABILITY_DURATION = 5000;
+export declare const LASER_CHARGE_TIME = 200;
+export declare const LASER_PROGRESSION_DELAY = 100;
 export declare enum PlayerColor {
     RED = "red",
     BLUE = "blue",

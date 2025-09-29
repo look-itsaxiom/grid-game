@@ -9,10 +9,14 @@ export declare class Player extends Schema {
     ready: boolean;
     alive: boolean;
     facing: Direction;
+    invulnerable: boolean;
+    invulnerabilityTimer: number;
 }
 export declare class GridCell extends Schema {
     state: CellState;
     colorTimer: number;
+    charging: boolean;
+    chargingTimer: number;
 }
 export declare class GameRoom extends Schema {
     gameState: string;

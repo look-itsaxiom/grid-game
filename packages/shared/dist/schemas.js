@@ -20,6 +20,8 @@ export class Player extends Schema {
         this.ready = false;
         this.alive = true;
         this.facing = Direction.UP;
+        this.invulnerable = false;
+        this.invulnerabilityTimer = 0;
     }
 }
 __decorate([
@@ -54,11 +56,21 @@ __decorate([
     type('string'),
     __metadata("design:type", String)
 ], Player.prototype, "facing", void 0);
+__decorate([
+    type('boolean'),
+    __metadata("design:type", Boolean)
+], Player.prototype, "invulnerable", void 0);
+__decorate([
+    type('number'),
+    __metadata("design:type", Number)
+], Player.prototype, "invulnerabilityTimer", void 0);
 export class GridCell extends Schema {
     constructor() {
         super(...arguments);
         this.state = CellState.NEUTRAL;
         this.colorTimer = 0;
+        this.charging = false;
+        this.chargingTimer = 0;
     }
 }
 __decorate([
@@ -69,6 +81,14 @@ __decorate([
     type('number'),
     __metadata("design:type", Number)
 ], GridCell.prototype, "colorTimer", void 0);
+__decorate([
+    type('boolean'),
+    __metadata("design:type", Boolean)
+], GridCell.prototype, "charging", void 0);
+__decorate([
+    type('number'),
+    __metadata("design:type", Number)
+], GridCell.prototype, "chargingTimer", void 0);
 export class GameRoom extends Schema {
     constructor() {
         super(...arguments);

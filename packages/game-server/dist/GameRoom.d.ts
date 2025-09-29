@@ -3,6 +3,8 @@ import { GameRoom } from 'shared';
 export declare class GridGameRoom extends Room<GameRoom> {
     private gameLoopInterval?;
     private colorTimers;
+    private chargingTimers;
+    private invulnerabilityTimers;
     onCreate(): void;
     onJoin(client: any): void;
     onLeave(client: any): void;
@@ -18,10 +20,12 @@ export declare class GridGameRoom extends Room<GameRoom> {
     private getNewPosition;
     private isValidPosition;
     private handleFire;
-    private fireLaser;
+    private startProgressiveLaser;
+    private fireCellLaser;
     private checkPlayersAtPosition;
     private checkPlayerCollision;
     private hitPlayer;
+    private startInvulnerability;
     private endGame;
     private returnToLobby;
     private gameLoop;
