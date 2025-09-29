@@ -21,5 +21,8 @@
   ],
   "devDependencies": {
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "colyseus.js": "^0.16.19"
   }
 }
