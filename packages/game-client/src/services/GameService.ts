@@ -21,12 +21,33 @@ export class GameService {
     this.client = new Colyseus.Client(serverUrl);
   }
 
-  async joinRoom(): Promise<void> {
+  async listRooms(): Promise<any[]> {
+    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+    const response = await fetch(`${serverUrl}/api/rooms`);
+    const data = await response.json();
+    return data.rooms || [];
+  }
+
+  async joinRoom(roomId?: string): Promise<void> {
     if (!this.client) {
       throw new Error('Client not connected');
     }
     
-    this.room = await this.client.joinOrCreate<GameRoom>('grid_game');
+    if (roomId) {
+      // Join specific room
+      this.room = await this.client.joinById<GameRoom>(roomId);
+    } else {
+      // Join or create a new room
+      this.room = await this.client.joinOrCreate<GameRoom>('grid_game');
+    }
+  }
+
+  async createRoom(): Promise<void> {
+    if (!this.client) {
+      throw new Error('Client not connected');
+    }
+    
+    this.room = await this.client.create<GameRoom>('grid_game');
   }
 
   getRoom(): Colyseus.Room<GameRoom> | undefined {

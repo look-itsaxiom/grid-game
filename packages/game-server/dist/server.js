@@ -1,4 +1,6 @@
-import { Server } from 'colyseus';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { Server } = require('colyseus');
 import { createServer } from 'http';
 import express from 'express';
 import cors from 'cors';
@@ -28,8 +30,19 @@ app.get('/', (req, res) => {
 // API endpoint to get room list (for lobby browser)
 app.get('/api/rooms', async (req, res) => {
     try {
-        // Simple room count - in a real app you'd implement proper room listing
-        res.json({ message: 'Room listing not implemented yet' });
+        const rooms = await gameServer.presence.find({ name: 'grid_game' });
+        const roomList = rooms.map((room) => ({
+            roomId: room.roomId,
+            playerCount: room.clients || 0,
+            maxPlayers: 4,
+            gameState: room.metadata?.gameState || 'lobby',
+            created: room.createdAt
+        }));
+        res.json({
+            success: true,
+            rooms: roomList,
+            totalRooms: roomList.length
+        });
     }
     catch (error) {
         console.error('Error fetching rooms:', error);

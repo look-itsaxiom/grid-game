@@ -1,4 +1,6 @@
-import { Room, ServerError } from 'colyseus';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { Room, Client } = require('colyseus');
 import { GameRoom, Player, GridCell } from 'shared';
 import { GRID_SIZE, MAX_PLAYERS, PLAYER_LIVES, PlayerColor, CellState, GameState, Direction } from 'shared';
 const FIRE_DELAY = 500; // ms
@@ -13,6 +15,12 @@ export class GridGameRoom extends Room {
         this.setState(new GameRoom());
         this.initializeGrid();
         this.maxClients = MAX_PLAYERS;
+        // Set room metadata for lobby browser
+        this.setMetadata({
+            gameState: GameState.LOBBY,
+            playerCount: 0,
+            maxPlayers: MAX_PLAYERS
+        });
         this.onMessage('input', (client, message) => {
             this.handleInput(client, message);
         });
@@ -23,24 +31,49 @@ export class GridGameRoom extends Room {
     }
     onJoin(client) {
         console.log(`Player ${client.sessionId} joined`);
-        if (Object.keys(this.state.players).length >= MAX_PLAYERS) {
-            throw new ServerError(400, 'Room is full');
+        // Check if room is already full
+        const currentPlayerCount = this.state.players.size;
+        if (currentPlayerCount >= MAX_PLAYERS) {
+            console.log(`Room is full (${currentPlayerCount}/${MAX_PLAYERS}), rejecting player ${client.sessionId}`);
+            throw new Error('Room is full');
         }
         const player = new Player();
         player.id = client.sessionId;
         player.color = this.getNextAvailableColor();
         player.lives = PLAYER_LIVES;
-        // Set starting position
-        const startPos = this.getStartingPosition(Object.keys(this.state.players).length);
+        player.alive = true;
+        player.ready = false;
+        // Set starting position based on current player count
+        const startPos = this.getStartingPosition(currentPlayerCount);
         player.x = startPos.x;
         player.y = startPos.y;
         this.state.players.set(client.sessionId, player);
+        // Update room metadata
+        this.setMetadata({
+            gameState: this.state.gameState,
+            playerCount: this.state.players.size,
+            maxPlayers: MAX_PLAYERS
+        });
+        console.log(`Player ${client.sessionId} added successfully. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
     }
     onLeave(client) {
         console.log(`Player ${client.sessionId} left`);
-        this.state.players.delete(client.sessionId);
+        // Only delete if the player actually exists in the room
+        if (this.state.players.has(client.sessionId)) {
+            this.state.players.delete(client.sessionId);
+            // Update room metadata
+            this.setMetadata({
+                gameState: this.state.gameState,
+                playerCount: this.state.players.size,
+                maxPlayers: MAX_PLAYERS
+            });
+            console.log(`Player ${client.sessionId} removed. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
+        }
+        else {
+            console.log(`Player ${client.sessionId} was not in the players list`);
+        }
         // If game was in progress and not enough players, end game
-        if (this.state.gameState === GameState.PLAYING && Object.keys(this.state.players).length < 2) {
+        if (this.state.gameState === GameState.PLAYING && this.state.players.size < 2) {
             this.endGame();
         }
     }
@@ -60,7 +93,7 @@ export class GridGameRoom extends Room {
         }
     }
     getNextAvailableColor() {
-        const usedColors = Array.from(this.state.players.values()).map(p => p.color);
+        const usedColors = Array.from(this.state.players.values()).map((p) => p.color);
         const colors = [PlayerColor.RED, PlayerColor.BLUE, PlayerColor.GREEN, PlayerColor.YELLOW];
         return colors.find(color => !usedColors.includes(color)) || PlayerColor.RED;
     }
@@ -100,13 +133,18 @@ export class GridGameRoom extends Room {
         player.ready = !player.ready;
         // Check if all players are ready
         const allPlayers = Array.from(this.state.players.values());
-        if (allPlayers.length >= 2 && allPlayers.every(p => p.ready)) {
+        if (allPlayers.length >= 2 && allPlayers.every((p) => p.ready)) {
             this.startReadyCountdown();
         }
     }
     startReadyCountdown() {
         this.state.gameState = GameState.READY;
         this.state.readyCountdown = READY_COUNTDOWN;
+        this.setMetadata({
+            gameState: this.state.gameState,
+            playerCount: this.state.players.size,
+            maxPlayers: MAX_PLAYERS
+        });
         setTimeout(() => {
             this.startGame();
         }, READY_COUNTDOWN);
@@ -114,8 +152,13 @@ export class GridGameRoom extends Room {
     startGame() {
         this.state.gameState = GameState.PLAYING;
         this.state.readyCountdown = 0;
+        this.setMetadata({
+            gameState: this.state.gameState,
+            playerCount: this.state.players.size,
+            maxPlayers: MAX_PLAYERS
+        });
         // Reset all players
-        Array.from(this.state.players.values()).forEach(player => {
+        Array.from(this.state.players.values()).forEach((player) => {
             player.lives = PLAYER_LIVES;
             player.alive = true;
             player.ready = false;
@@ -204,7 +247,7 @@ export class GridGameRoom extends Room {
         });
     }
     checkPlayersAtPosition(pos, attackerColor) {
-        Array.from(this.state.players.values()).forEach(player => {
+        Array.from(this.state.players.values()).forEach((player) => {
             if (player.x === pos.x && player.y === pos.y &&
                 player.color !== attackerColor && player.alive) {
                 this.hitPlayer(player);
@@ -223,7 +266,7 @@ export class GridGameRoom extends Room {
         if (player.lives <= 0) {
             player.alive = false;
             // Check for game over
-            const alivePlayers = Array.from(this.state.players.values()).filter(p => p.alive);
+            const alivePlayers = Array.from(this.state.players.values()).filter((p) => p.alive);
             if (alivePlayers.length <= 1) {
                 this.endGame(alivePlayers[0]);
             }
@@ -232,6 +275,11 @@ export class GridGameRoom extends Room {
     endGame(winner) {
         this.state.gameState = GameState.GAME_OVER;
         this.state.winner = winner?.id || '';
+        this.setMetadata({
+            gameState: this.state.gameState,
+            playerCount: this.state.players.size,
+            maxPlayers: MAX_PLAYERS
+        });
         // Return to lobby after delay
         setTimeout(() => {
             this.returnToLobby();
@@ -240,10 +288,15 @@ export class GridGameRoom extends Room {
     returnToLobby() {
         this.state.gameState = GameState.LOBBY;
         this.state.winner = '';
+        this.setMetadata({
+            gameState: this.state.gameState,
+            playerCount: this.state.players.size,
+            maxPlayers: MAX_PLAYERS
+        });
         // Reset grid
         this.initializeGrid();
         // Reset players
-        Array.from(this.state.players.values()).forEach(player => {
+        Array.from(this.state.players.values()).forEach((player) => {
             player.ready = false;
             player.alive = true;
             player.lives = PLAYER_LIVES;

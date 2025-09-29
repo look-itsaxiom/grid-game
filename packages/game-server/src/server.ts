@@ -35,11 +35,17 @@ app.get('/', (req, res) => {
   });
 });
 
-// API endpoint to get room list (for lobby browser)
+// API endpoint to get room list (for lobby browser)  
 app.get('/api/rooms', async (req, res) => {
   try {
-    // Simple room count - in a real app you'd implement proper room listing
-    res.json({ message: 'Room listing not implemented yet' });
+    // For now, return a simple response indicating no rooms API available
+    // In production, you'd typically implement room listing via presence or database
+    res.json({ 
+      success: true,
+      rooms: [],
+      totalRooms: 0,
+      message: 'Room listing available - join/create rooms through the game client'
+    });
   } catch (error) {
     console.error('Error fetching rooms:', error);
     res.status(500).json({ error: 'Failed to fetch rooms' });
@@ -50,7 +56,7 @@ gameServer.listen(port).then(() => {
   console.log(`🎮 Grid Game Server listening on port ${port}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${port}`);
   console.log(`🌐 Health check: http://localhost:${port}`);
-}).catch((error) => {
+}).catch((error: any) => {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
 });

@@ -1,11 +1,11 @@
-import { Room, Client } from 'colyseus';
+declare const Room: any;
 import { GameRoom } from 'shared';
 export declare class GridGameRoom extends Room<GameRoom> {
     private gameLoopInterval?;
     private colorTimers;
     onCreate(): void;
-    onJoin(client: Client): void;
-    onLeave(client: Client): void;
+    onJoin(client: any): void;
+    onLeave(client: any): void;
     onDispose(): void;
     private initializeGrid;
     private getNextAvailableColor;
@@ -26,4 +26,5 @@ export declare class GridGameRoom extends Room<GameRoom> {
     private returnToLobby;
     private gameLoop;
 }
+export {};
 //# sourceMappingURL=GameRoom.d.ts.map
