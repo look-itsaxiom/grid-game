@@ -6,6 +6,15 @@ export class StartScene extends Phaser.Scene {
   create() {
     const { width, height } = this.cameras.main;
 
+    // Get player name
+    const playerName = localStorage.getItem('gridGamePlayerName') || 'Anonymous Player';
+
+    // Welcome message
+    this.add.text(width / 2, height / 3 - 50, `Welcome, ${playerName}!`, {
+      fontSize: '24px',
+      color: '#bdc3c7'
+    }).setOrigin(0.5);
+
     // Title
     this.add.text(width / 2, height / 3, '4-Player Grid Game', {
       fontSize: '48px',
@@ -27,11 +36,20 @@ export class StartScene extends Phaser.Scene {
       color: '#ffffff'
     }).setOrigin(0.5);
 
+    // Change Name button
+    const changeNameButton = this.add.rectangle(width / 2, height / 2 + 160, 200, 50, 0xf39c12);
+    changeNameButton.setInteractive({ useHandCursor: true });
+    
+    this.add.text(width / 2, height / 2 + 160, 'CHANGE NAME', {
+      fontSize: '20px',
+      color: '#ffffff'
+    }).setOrigin(0.5);
+
     // Credits button
-    const creditsButton = this.add.rectangle(width / 2, height / 2 + 160, 200, 50, 0x95a5a6);
+    const creditsButton = this.add.rectangle(width / 2, height / 2 + 230, 200, 50, 0x95a5a6);
     creditsButton.setInteractive({ useHandCursor: true });
     
-    this.add.text(width / 2, height / 2 + 160, 'CREDITS', {
+    this.add.text(width / 2, height / 2 + 230, 'CREDITS', {
       fontSize: '20px',
       color: '#ffffff'
     }).setOrigin(0.5);
@@ -45,6 +63,16 @@ export class StartScene extends Phaser.Scene {
       playButton.setFillStyle(0x3498db);
       console.log('PLAY button clicked - transitioning to LobbyFinderScene');
       this.scene.start('LobbyFinderScene');
+    });
+
+    changeNameButton.on('pointerdown', () => {
+      changeNameButton.setFillStyle(0xe67e22);
+    });
+
+    changeNameButton.on('pointerup', () => {
+      changeNameButton.setFillStyle(0xf39c12);
+      console.log('CHANGE NAME button clicked - transitioning to PlayerNameScene');
+      this.scene.start('PlayerNameScene');
     });
 
     creditsButton.on('pointerdown', () => {
@@ -64,6 +92,14 @@ export class StartScene extends Phaser.Scene {
 
     playButton.on('pointerout', () => {
       playButton.setFillStyle(0x3498db);
+    });
+
+    changeNameButton.on('pointerover', () => {
+      changeNameButton.setFillStyle(0xf8c471);
+    });
+
+    changeNameButton.on('pointerout', () => {
+      changeNameButton.setFillStyle(0xf39c12);
     });
 
     creditsButton.on('pointerover', () => {

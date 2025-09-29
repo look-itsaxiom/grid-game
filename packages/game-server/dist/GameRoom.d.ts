@@ -1,12 +1,15 @@
 declare const Room: any;
 import { GameRoom } from 'shared';
+import { CreateRoomOptions, JoinRoomOptions } from 'shared';
 export declare class GridGameRoom extends Room<GameRoom> {
     private gameLoopInterval?;
     private colorTimers;
     private chargingTimers;
     private invulnerabilityTimers;
-    onCreate(): void;
-    onJoin(client: any): void;
+    private lastFireTime;
+    private lastMoveTime;
+    onCreate(options?: CreateRoomOptions): void;
+    onJoin(client: any, options?: JoinRoomOptions): void;
     onLeave(client: any): void;
     onDispose(): void;
     private initializeGrid;

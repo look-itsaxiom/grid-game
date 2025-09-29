@@ -4,6 +4,7 @@ const { Room, Client } = require('colyseus');
 import { GameRoom, Player, GridCell } from 'shared';
 import { GRID_SIZE, MAX_PLAYERS, PLAYER_LIVES, INVULNERABILITY_DURATION, LASER_CHARGE_TIME, LASER_PROGRESSION_DELAY, PlayerColor, CellState, GameState, Direction } from 'shared';
 const FIRE_DELAY = 500; // ms
+const MOVE_DELAY = 100; // ms - prevent movement spam
 const COLOR_DURATION = 2000; // ms  
 const READY_COUNTDOWN = 3000; // ms
 export class GridGameRoom extends Room {
@@ -12,16 +13,23 @@ export class GridGameRoom extends Room {
         this.colorTimers = new Map();
         this.chargingTimers = new Map();
         this.invulnerabilityTimers = new Map();
+        this.lastFireTime = new Map();
+        this.lastMoveTime = new Map();
     }
-    onCreate() {
+    onCreate(options = {}) {
         this.setState(new GameRoom());
         this.initializeGrid();
         this.maxClients = MAX_PLAYERS;
+        // Set room name if provided
+        if (options.roomName) {
+            this.state.roomName = options.roomName;
+        }
         // Set room metadata for lobby browser
         this.setMetadata({
             gameState: GameState.LOBBY,
             playerCount: 0,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: options.roomName || ''
         });
         this.onMessage('input', (client, message) => {
             this.handleInput(client, message);
@@ -31,7 +39,7 @@ export class GridGameRoom extends Room {
             this.gameLoop();
         }, 16); // ~60fps
     }
-    onJoin(client) {
+    onJoin(client, options = {}) {
         console.log(`Player ${client.sessionId} joined`);
         // Check if room is already full
         const currentPlayerCount = this.state.players.size;
@@ -41,6 +49,7 @@ export class GridGameRoom extends Room {
         }
         const player = new Player();
         player.id = client.sessionId;
+        player.name = options.playerName || 'Anonymous Player';
         player.color = this.getNextAvailableColor();
         player.lives = PLAYER_LIVES;
         player.alive = true;
@@ -56,20 +65,25 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
-        console.log(`Player ${client.sessionId} added successfully. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
+        console.log(`Player ${client.sessionId} (${player.name}) added successfully. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
     }
     onLeave(client) {
         console.log(`Player ${client.sessionId} left`);
         // Only delete if the player actually exists in the room
         if (this.state.players.has(client.sessionId)) {
             this.state.players.delete(client.sessionId);
+            // Clean up rate limiting timers
+            this.lastFireTime.delete(client.sessionId);
+            this.lastMoveTime.delete(client.sessionId);
             // Update room metadata
             this.setMetadata({
                 gameState: this.state.gameState,
                 playerCount: this.state.players.size,
-                maxPlayers: MAX_PLAYERS
+                maxPlayers: MAX_PLAYERS,
+                roomName: this.state.roomName
             });
             console.log(`Player ${client.sessionId} removed. Room now has ${this.state.players.size}/${MAX_PLAYERS} players`);
         }
@@ -88,6 +102,9 @@ export class GridGameRoom extends Room {
         this.colorTimers.forEach(timer => clearTimeout(timer));
         this.chargingTimers.forEach(timer => clearTimeout(timer));
         this.invulnerabilityTimers.forEach(timer => clearTimeout(timer));
+        // Clear rate limiting maps
+        this.lastFireTime.clear();
+        this.lastMoveTime.clear();
     }
     initializeGrid() {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -162,7 +179,8 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
         setTimeout(() => {
             this.startGame();
@@ -174,7 +192,8 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
         // Reset all players
         Array.from(this.state.players.values()).forEach((player, index) => {
@@ -203,6 +222,14 @@ export class GridGameRoom extends Room {
             console.log(`Move failed - player: ${!!player}, alive: ${player?.alive}`);
             return;
         }
+        // Rate limiting for movement
+        const now = Date.now();
+        const lastMove = this.lastMoveTime.get(client.sessionId) || 0;
+        if (now - lastMove < MOVE_DELAY) {
+            console.log(`Move rejected - rate limited (${now - lastMove}ms < ${MOVE_DELAY}ms)`);
+            return;
+        }
+        this.lastMoveTime.set(client.sessionId, now);
         const oldPos = { x: player.x, y: player.y };
         const newPos = this.getNewPosition(player, direction);
         console.log(`Attempting move from (${oldPos.x},${oldPos.y}) to (${newPos.x},${newPos.y})`);
@@ -245,6 +272,14 @@ export class GridGameRoom extends Room {
         const player = this.state.players.get(client.sessionId);
         if (!player || !player.alive || player.invulnerable)
             return;
+        // Rate limiting for firing
+        const now = Date.now();
+        const lastFire = this.lastFireTime.get(client.sessionId) || 0;
+        if (now - lastFire < FIRE_DELAY) {
+            console.log(`Fire rejected - rate limited (${now - lastFire}ms < ${FIRE_DELAY}ms)`);
+            return;
+        }
+        this.lastFireTime.set(client.sessionId, now);
         this.startProgressiveLaser(player);
     }
     startProgressiveLaser(player) {
@@ -363,7 +398,8 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
         // Return to lobby after delay
         setTimeout(() => {
@@ -376,7 +412,8 @@ export class GridGameRoom extends Room {
         this.setMetadata({
             gameState: this.state.gameState,
             playerCount: this.state.players.size,
-            maxPlayers: MAX_PLAYERS
+            maxPlayers: MAX_PLAYERS,
+            roomName: this.state.roomName
         });
         // Reset grid
         this.initializeGrid();
@@ -404,15 +441,17 @@ export class GridGameRoom extends Room {
         if (this.state.readyCountdown > 0) {
             this.state.readyCountdown = Math.max(0, this.state.readyCountdown - 16);
         }
-        // Update invulnerability timers
+        // Update invulnerability timers - only for invulnerable players
         Array.from(this.state.players.values()).forEach((player) => {
             if (player.invulnerable && player.invulnerabilityTimer > 0) {
                 player.invulnerabilityTimer = Math.max(0, player.invulnerabilityTimer - 16);
             }
         });
-        // Update charging timers
-        this.state.grid.forEach((cell) => {
-            if (cell.charging && cell.chargingTimer > 0) {
+        // Update charging timers - only for cells that are actually charging
+        // This is more efficient than checking all grid cells
+        this.chargingTimers.forEach((timer, cellKey) => {
+            const cell = this.state.grid.get(cellKey);
+            if (cell && cell.charging && cell.chargingTimer > 0) {
                 cell.chargingTimer = Math.max(0, cell.chargingTimer - 16);
             }
         });

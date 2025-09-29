@@ -1,6 +1,6 @@
 import * as Colyseus from 'colyseus.js';
 import { GameRoom } from 'shared';
-import type { InputMessage } from 'shared';
+import type { InputMessage, JoinRoomOptions, CreateRoomOptions } from 'shared';
 
 export class GameService {
   private static instance: GameService;
@@ -33,21 +33,30 @@ export class GameService {
       throw new Error('Client not connected');
     }
     
+    const playerName = localStorage.getItem('gridGamePlayerName') || 'Anonymous Player';
+    const options: JoinRoomOptions = { playerName };
+    
     if (roomId) {
       // Join specific room
-      this.room = await this.client.joinById<GameRoom>(roomId);
+      this.room = await this.client.joinById<GameRoom>(roomId, options);
     } else {
       // Join or create a new room
-      this.room = await this.client.joinOrCreate<GameRoom>('grid_game');
+      this.room = await this.client.joinOrCreate<GameRoom>('grid_game', options);
     }
   }
 
-  async createRoom(): Promise<void> {
+  async createRoom(roomName?: string): Promise<void> {
     if (!this.client) {
       throw new Error('Client not connected');
     }
     
-    this.room = await this.client.create<GameRoom>('grid_game');
+    const playerName = localStorage.getItem('gridGamePlayerName') || 'Anonymous Player';
+    const options: CreateRoomOptions = { 
+      playerName,
+      roomName: roomName || undefined
+    };
+    
+    this.room = await this.client.create<GameRoom>('grid_game', options);
   }
 
   getRoom(): Colyseus.Room<GameRoom> | undefined {

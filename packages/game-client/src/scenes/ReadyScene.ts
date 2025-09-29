@@ -18,8 +18,12 @@ export class ReadyScene extends Phaser.Scene {
   create() {
     const { width, height } = this.cameras.main;
 
-    // Title
-    this.add.text(width / 2, 60, 'Lobby - Get Ready!', {
+    // Title - will be updated with room name
+    const room = this.gameService.getRoom();
+    const roomName = room?.state?.roomName || '';
+    const titleText = roomName ? `${roomName} - Get Ready!` : 'Lobby - Get Ready!';
+    
+    this.add.text(width / 2, 60, titleText, {
       fontSize: '32px',
       color: '#ecf0f1'
     }).setOrigin(0.5);
@@ -105,8 +109,9 @@ export class ReadyScene extends Phaser.Scene {
     players.forEach((player: Player, index: number) => {
       const y = 160 + (index * 30);
       const readyStatus = player.ready ? '✓ READY' : '- Not Ready';
+      const playerName = player.name || `Player ${index + 1}`;
       const text = this.add.text(this.cameras.main.width / 2, y, 
-        `Player ${index + 1} (${player.color}): ${readyStatus}`, {
+        `${playerName} (${player.color}): ${readyStatus}`, {
           fontSize: '18px',
           color: colors[index] || '#ffffff'
         }).setOrigin(0.5);

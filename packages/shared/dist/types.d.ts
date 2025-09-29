@@ -37,6 +37,13 @@ export interface InputMessage {
     type: 'move' | 'fire' | 'ready';
     direction?: Direction;
 }
+export interface JoinRoomOptions {
+    playerName?: string;
+}
+export interface CreateRoomOptions {
+    roomName?: string;
+    playerName?: string;
+}
 export interface GameConfig {
     gridSize: number;
     maxPlayers: number;
